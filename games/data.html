@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8" />
-<title>達達特攻 - 簡化完整版</title>
+<title>達達特攻 - 搖桿版</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <style>
   :root { --ui-bg: rgba(0,0,0,.85); }
@@ -28,10 +28,35 @@
   }
   button:hover { filter:brightness(1.1); }
   .grid { display:flex; flex-wrap:wrap; justify-content:center; }
+  /* 虛擬搖桿 */
+#joystickContainer {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.05);
+  touch-action: none;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+#joystickStick {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.3);
+  transform: translate(0,0);
+}
 </style>
 </head>
 <body>
   <canvas id="c" width="900" height="600"></canvas>
+
+  <div id="joystickContainer">
+    <div id="joystickStick"></div>
+  </div>
 
   <div id="uiTop">
     <div class="bar hp"><span style="width:100%"></span></div>
@@ -104,13 +129,13 @@
     'heal',         // 回血
     'shield',       // 短時間護盾
     'fireBomb',     // 火焰瓶
-    'summoner',     // 首位者（召喚小兵）
+    'summoner',     // 守衛者（召喚小兵）
     'AUnit',        // A 機（環狀子彈）
     'BUnit'         // B 機（鎖定雷射）
   ];
   const skillName = s => ({
     attackSpeed:'攻速提升', bladeCount:'刀刃數增加', heal:'回血',
-    shield:'護盾', fireBomb:'火焰瓶', summoner:'首位者（召喚）',
+    shield:'護盾', fireBomb:'火焰瓶', summoner:'守衛者（召喚）',
     AUnit:'A 機（環狀彈）', BUnit:'B 機（雷射）'
   }[s] || s);
 
@@ -564,6 +589,44 @@
     gameOverDiv.style.display='block';
   }
 
+  // ===== 虛擬搖桿 =====
+    const joystickContainer = document.getElementById('joystickContainer');
+    const joystickStick = document.getElementById('joystickStick');
+    let stickPos = {x:0,y:0};
+    let joystickActive = false;
+
+    function setStick(x,y) {
+      joystickStick.style.transform = `translate(${x}px, ${y}px)`;
+      stickPos.x = x;
+      stickPos.y = y;
+    }
+
+    joystickContainer.addEventListener('pointerdown', (e) => {
+      joystickActive = true;
+    });
+    joystickContainer.addEventListener('pointerup', (e) => {
+      joystickActive = false;
+      setStick(0,0);
+    });
+    joystickContainer.addEventListener('pointercancel', (e) => {
+      joystickActive = false;
+      setStick(0,0);
+    });
+    joystickContainer.addEventListener('pointermove', (e) => {
+      if (!joystickActive) return;
+      const rect = joystickContainer.getBoundingClientRect();
+      const dx = e.clientX - (rect.left + rect.width/2);
+      const dy = e.clientY - (rect.top + rect.height/2);
+      const maxDist = rect.width/2 - 25; // 最大偏移
+      let dist = Math.hypot(dx,dy);
+      let nx = dx, ny = dy;
+      if (dist > maxDist) {
+        nx = dx/dist * maxDist;
+        ny = dy/dist * maxDist;
+      }
+      setStick(nx, ny);
+    });
+
   // ===== 主迴圈 =====
   function tick() {
     update();
@@ -573,6 +636,34 @@
 
   // 初始一次升級（示範可移除）
   // showLevelUp();
+
+  // ===== 修改玩家移動 =====
+    const originalUpdate = update;
+    update = function() {
+      // 原本鍵盤操作
+      let up = keys['w'] || keys['arrowup'];
+      let dn = keys['s'] || keys['arrowdown'];
+      let lf = keys['a'] || keys['arrowleft'];
+      let rt = keys['d'] || keys['arrowright'];
+      let vx = (rt?1:0) - (lf?1:0);
+      let vy = (dn?1:0) - (up?1:0);
+
+      // 搖桿操作疊加
+      if (stickPos.x!==0 || stickPos.y!==0) {
+        const len = Math.hypot(stickPos.x, stickPos.y) || 1;
+        vx += stickPos.x/len;
+        vy += stickPos.y/len;
+      }
+
+      const len = Math.hypot(vx,vy) || 1;
+      vx = vx/len * player.speed;
+      vy = vy/len * player.speed;
+      player.x += vx;
+      player.y += vy;
+
+      // 呼叫原本 update 邏輯（射擊、敵人更新、UI 等）
+      originalUpdate();
+    };
 
   tick();
 })();
