@@ -19,6 +19,10 @@
     position:absolute; top:8px; left:50%; transform:translateX(-50%);
     display:flex; gap:16px; align-items:center; z-index:5;
   }
+  #uiSkills {
+    position:absolute; top:48px; left:50%; transform:translateX(-50%);
+    display:flex; gap:16px; align-items:center; z-index:5;
+  }
   .bar { position:relative; width:160px; height:12px; border:1px solid #fff; border-radius:8px; overflow:hidden; background:rgba(255,255,255,.08); }
   .bar > span { position:absolute; left:0; top:0; bottom:0; background:#e74c3c; }
   .xp > span { background:#4caf50; }
@@ -64,7 +68,7 @@
     <div class="chip" id="chipLevel">Lv 1</div>
     <div class="chip" id="chipScore">Score 0</div>
   </div>
-
+  <div id="uiSkills"></div>
   <div id="levelUp">
     <h2>選擇一個技能</h2>
     <div id="skillOptions" class="grid"></div>
@@ -86,7 +90,7 @@
     hp: 5, maxHp: 5,
     xp: 0, level: 1, xpToNext: () => player.level*6,
     skills: new Set(),
-    flags: { shield:false, shieldTimer:0, summoner:false, AUnit:false, BUnit:false },
+    flags: { shield:false, shieldTimer:0, summoner:false, AUnit:false, BUnit:false, AUnitLevel:0,BUnitLevel:0 },
   };
 
   // 無限地圖：玩家固定顯示在中心，其他物件以世界座標 - 相機位移繪製
@@ -117,6 +121,7 @@
   const levelUpDiv = document.getElementById('levelUp');
   const skillOptionsDiv = document.getElementById('skillOptions');
   const gameOverDiv = document.getElementById('gameOver');
+  const uiSkills = document.getElementById('uiSkills');
 
   // ===== 控制 =====
   addEventListener('keydown', (e)=>{ keys[e.key.toLowerCase()] = true; });
@@ -135,8 +140,8 @@
   ];
   const skillName = s => ({
     attackSpeed:'攻速提升', bladeCount:'刀刃數增加', heal:'回血',
-    shield:'護盾', fireBomb:'火焰瓶', summoner:'守衛者（召喚）',
-    AUnit:'A 機（環狀彈）', BUnit:'B 機（雷射）'
+    shield:'護盾', fireBomb:'火焰瓶', summoner:'召喚守衛者',
+    AUnit:'環狀彈', BUnit:'雷射'
   }[s] || s);
 
   function showLevelUp() {
@@ -175,10 +180,84 @@
       return;
     }
     if (s==='summoner') { player.flags.summoner = true; return; }
-    if (s==='AUnit') { player.flags.AUnit = true; return; }
-    if (s==='BUnit') { player.flags.BUnit = true; return; }
+    if(s==='AUnit') {
+      player.flags.AUnit = true;
+      if(player.flags.AUnitLevel < 3) player.flags.AUnitLevel++;
+      return;
+    }
+    if(s==='BUnit') {
+      player.flags.BUnit = true;
+      if(player.flags.BUnitLevel < 3) player.flags.BUnitLevel++;
+      return;
+    }
     // 其它被動技能
     player.skills.add(s);
+  }
+
+  // ===== 技能列處理 =====
+  function createSkillDiv(name, level){
+    let levelText = level
+    const skillDiv = document.createElement('div');
+      skillDiv.style.width = '80px';
+      skillDiv.style.height = '50px';
+      skillDiv.style.display = 'flex';
+      skillDiv.style.flexDirection = 'column';
+      skillDiv.style.justifyContent = 'center';
+      skillDiv.style.alignItems = 'center';
+      skillDiv.style.padding = '4px';
+      skillDiv.style.background = 'rgba(255,255,255,.1)';
+      skillDiv.style.border = '1px solid rgba(255,255,255,.2)';
+      skillDiv.style.borderRadius = '8px';
+      skillDiv.style.fontSize = '12px';
+      skillDiv.style.textAlign = 'center';
+      
+      const nameDiv = document.createElement('div');
+      nameDiv.textContent = skillName(name);
+      const levelDiv = document.createElement('div');
+      levelDiv.textContent = levelText;
+
+      skillDiv.appendChild(nameDiv);
+      skillDiv.appendChild(levelDiv);
+    return skillDiv
+  }
+
+  function updateSkillsUI() {
+    uiSkills.innerHTML = '';
+    player.skills.forEach(s => {
+      let levelText = '';
+      // if(s==='AUnit') levelText = 'Lv ' + player.flags.AUnitLevel;
+      // else if(s==='BUnit') levelText = 'Lv ' + player.flags.BUnitLevel;
+
+      const skillDiv = createSkillDiv(skillName(s))
+      uiSkills.appendChild(skillDiv);
+    });
+    
+    if(player.flags.summoner)
+    {
+      const skillDiv = createSkillDiv(skillName('summoner'))
+      uiSkills.appendChild(skillDiv);
+    }
+
+    if(player.flags.shield)
+    {
+      let levelText = 'T: ' + player.flags.shieldTimer;      
+      const skillDiv = createSkillDiv(skillName('shield'), levelText)
+      uiSkills.appendChild(skillDiv);
+    }
+
+    if(player.flags.AUnit)
+    {
+      let levelText = 'Lv ' + player.flags.AUnitLevel;;
+      const skillDiv = createSkillDiv(skillName('AUnit'), levelText)
+      uiSkills.appendChild(skillDiv);
+    }
+
+    if(player.flags.BUnit)
+    {
+      let levelText = 'Lv ' + player.flags.BUnitLevel;;
+      const skillDiv = createSkillDiv(skillName('BUnit'), levelText)
+      uiSkills.appendChild(skillDiv);
+    }
   }
 
   // ===== 工具 =====
@@ -226,29 +305,35 @@
 
   // ===== 射擊（刀刃）=====
   function shootBlade() {
-    if (paused || ended) return;
-    if (enemies.length===0) return;
-    const now = performance.now();
-    let cd = 800;
-    if (player.skills.has('attackSpeed')) cd = 450;
-    if (now - lastBladeTime < cd) return;
+  if (paused || ended) return;
+  if (enemies.length === 0) return;
+  const now = performance.now();
+  let cd = 800;
+  if (player.skills.has('attackSpeed')) cd = 450;
+  if (now - lastBladeTime < cd) return;
 
-    const target = findNearestEnemy();
-    if (!target) return;
+  // 刀刃上限 5
+  if (blades.length >= 5) return;
 
-    let count = player.skills.has('bladeCount') ? 2 : 1;
-    for (let i=0;i<count;i++) {
-      const baseAng = Math.atan2(target.y-player.y, target.x-player.x);
-      const ang = baseAng + (i-(count-1)/2)*0.18;
-      const spd = 7;
-      blades.push({
-        x: player.x, y: player.y,
-        vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
-        size: 6, angle: 0, va: 0.35, damage: 2
-      });
-    }
-    lastBladeTime = now;
+  const target = findNearestEnemy();
+  if (!target) return;
+
+  let count = player.skills.has('bladeCount') ? 2 : 1;
+  for (let i = 0; i < count; i++) {
+    const baseAng = Math.atan2(target.y - player.y, target.x - player.x);
+    const ang = baseAng + (i - (count - 1) / 2) * 0.18;
+    const spd = 7;
+    blades.push({
+      x: player.x, y: player.y,
+      vx: Math.cos(ang) * spd,
+      vy: Math.sin(ang) * spd,
+      size: 6, angle: 0, va: 0.35, damage: 2
+    });
   }
+
+  lastBladeTime = now;
+}
+
 
   // ===== 召喚物 / A機 / B機 行為 =====
   function allyBehaviors() {
@@ -276,23 +361,26 @@
     }
 
     // A 機：每 3 秒釋放一圈彈
-    if (player.flags.AUnit && frame%180===0) {
-      for (let a=0;a<360;a+=24) {
-        const rad = a*Math.PI/180, sp=5;
-        aRingShots.push({ x:player.x, y:player.y, vx:Math.cos(rad)*sp, vy:Math.sin(rad)*sp, life:120, damage:1 });
+    if (player.flags.AUnit && frame % 180 === 0) {
+      const bulletCount = 12 + player.flags.AUnitLevel * 4; // 1級12發，2級16發，3級20發
+      for (let a = 0; a < 360; a += 360 / bulletCount) {
+        const rad = a * Math.PI / 180, sp = 5 + player.flags.AUnitLevel; // 高級速度稍快
+        aRingShots.push({ x: player.x, y: player.y, vx: Math.cos(rad) * sp, vy: Math.sin(rad) * sp, life: 120, damage: player.flags.AUnitLevel });
       }
     }
 
+
     // B 機：每 2 秒雷射鎖定最近敵人
-    if (player.flags.BUnit && frame%120===0) {
+    if (player.flags.BUnit && frame % 120 === 0) {
       const t = findNearestEnemy();
       if (t) {
-        lasers.push({ x1:player.x, y1:player.y, x2:t.x, y2:t.y, life:24, damage:4 });
-        // 直接造成傷害（確保 BOSS 也吃傷害）
-        t.hp -= 4;
-        if (t.hp<=0) t.alive=false;
+        const damage = 4 * player.flags.BUnitLevel; // 1級4傷害，2級8，3級12
+        lasers.push({ x1: player.x, y1: player.y, x2: t.x, y2: t.y, life: 24, damage: damage });
+        t.hp -= damage;
+        if (t.hp <= 0) t.alive = false;
       }
     }
+
   }
 
   // ===== 更新 =====
@@ -300,19 +388,31 @@
     if (paused || ended) return;
     frame++;
 
-    // 移動（世界座標）
-    const up = keys['w'] || keys['arrowup'];
-    const dn = keys['s'] || keys['arrowdown'];
-    const lf = keys['a'] || keys['arrowleft'];
-    const rt = keys['d'] || keys['arrowright'];
-    let vx = (rt?1:0) - (lf?1:0);
-    let vy = (dn?1:0) - (up?1:0);
-    const len = Math.hypot(vx,vy)||1;
-    vx = vx/len*player.speed;
-    vy = vy/len*player.speed;
-    player.x += vx; player.y += vy;
+    // ===== 玩家移動 =====
+    let up = keys['w'] || keys['arrowup'];
+    let dn = keys['s'] || keys['arrowdown'];
+    let lf = keys['a'] || keys['arrowleft'];
+    let rt = keys['d'] || keys['arrowright'];
 
-    // 護盾計時
+    let vx = (rt ? 1 : 0) - (lf ? 1 : 0);
+    let vy = (dn ? 1 : 0) - (up ? 1 : 0);
+
+    // ===== 搖桿控制整合 =====
+    if(stickPos.x !== 0 || stickPos.y !== 0) {
+      const len = Math.hypot(stickPos.x, stickPos.y) || 1;
+      vx += stickPos.x / len;
+      vy += stickPos.y / len;
+    }
+
+    // 正規化速度並套用玩家速度
+    const len = Math.hypot(vx, vy) || 1;
+    vx = vx / len * player.speed;
+    vy = vy / len * player.speed;
+
+    player.x += vx;
+    player.y += vy;
+
+    // ===== 護盾計時 =====
     if (player.flags.shield) {
       player.flags.shieldTimer--;
       if (player.flags.shieldTimer<=0) player.flags.shield=false;
@@ -467,6 +567,7 @@
     xpBar.style.width = `${(player.xp/player.xpToNext())*100}%`;
     chipLevel.textContent = `Lv ${player.level}`;
     chipScore.textContent = `Score ${score}`;
+    updateSkillsUI(); // <-- 新增
   }
 
   function afterKill() {
@@ -627,6 +728,7 @@
       setStick(nx, ny);
     });
 
+
   // ===== 主迴圈 =====
   function tick() {
     update();
@@ -637,33 +739,7 @@
   // 初始一次升級（示範可移除）
   // showLevelUp();
 
-  // ===== 修改玩家移動 =====
-    const originalUpdate = update;
-    update = function() {
-      // 原本鍵盤操作
-      let up = keys['w'] || keys['arrowup'];
-      let dn = keys['s'] || keys['arrowdown'];
-      let lf = keys['a'] || keys['arrowleft'];
-      let rt = keys['d'] || keys['arrowright'];
-      let vx = (rt?1:0) - (lf?1:0);
-      let vy = (dn?1:0) - (up?1:0);
-
-      // 搖桿操作疊加
-      if (stickPos.x!==0 || stickPos.y!==0) {
-        const len = Math.hypot(stickPos.x, stickPos.y) || 1;
-        vx += stickPos.x/len;
-        vy += stickPos.y/len;
-      }
-
-      const len = Math.hypot(vx,vy) || 1;
-      vx = vx/len * player.speed;
-      vy = vy/len * player.speed;
-      player.x += vx;
-      player.y += vy;
-
-      // 呼叫原本 update 邏輯（射擊、敵人更新、UI 等）
-      originalUpdate();
-    };
+  
 
   tick();
 })();
