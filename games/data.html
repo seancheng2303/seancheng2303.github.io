@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<title>達達特攻 - 簡化完整版</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root { --ui-bg: rgba(0,0,0,.85); }
+  body { margin:0; background:#111; height:100vh; display:flex; justify-content:center; align-items:center; color:#fff; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans TC","Microsoft JhengHei",Arial,sans-serif; }
+  canvas { background:#1d1f20; border:2px solid #fff; max-width:100vw; max-height:100vh; }
+  #levelUp, #gameOver {
+    position:absolute; left:50%; transform:translateX(-50%);
+    background:var(--ui-bg); padding:20px; border-radius:12px; display:none; text-align:center;
+    box-shadow:0 8px 24px rgba(0,0,0,.4); z-index:10;
+  }
+  #levelUp { top:18%; max-width:720px; }
+  #gameOver { top:30%; font-size:18px; }
+  #uiTop {
+    position:absolute; top:8px; left:50%; transform:translateX(-50%);
+    display:flex; gap:16px; align-items:center; z-index:5;
+  }
+  .bar { position:relative; width:160px; height:12px; border:1px solid #fff; border-radius:8px; overflow:hidden; background:rgba(255,255,255,.08); }
+  .bar > span { position:absolute; left:0; top:0; bottom:0; background:#e74c3c; }
+  .xp > span { background:#4caf50; }
+  .chip { padding:4px 8px; background:rgba(255,255,255,.1); border:1px solid rgba(255,255,255,.2); border-radius:8px; font-size:12px; }
+  button {
+    margin:8px; padding:10px 16px; font-size:16px; cursor:pointer; border-radius:8px; border:1px solid #81c7ff; background:#0b2a3a; color:#cfeeff;
+  }
+  button:hover { filter:brightness(1.1); }
+  .grid { display:flex; flex-wrap:wrap; justify-content:center; }
+</style>
+</head>
+<body>
+  <canvas id="c" width="900" height="600"></canvas>
+
+  <div id="uiTop">
+    <div class="bar hp"><span style="width:100%"></span></div>
+    <div class="bar xp"><span style="width:0%"></span></div>
+    <div class="chip" id="chipLevel">Lv 1</div>
+    <div class="chip" id="chipScore">Score 0</div>
+  </div>
+
+  <div id="levelUp">
+    <h2>選擇一個技能</h2>
+    <div id="skillOptions" class="grid"></div>
+  </div>
+
+  <div id="gameOver"></div>
+
+<script>
+(() => {
+  // ===== 基本設定 =====
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const W = () => canvas.width, H = () => canvas.height;
+  const CENTER = () => ({x: W()/2, y: H()/2});
+
+  // 遊戲狀態（世界座標）
+  const player = {
+    x: 0, y: 0, speed: 3.0,
+    hp: 5, maxHp: 5,
+    xp: 0, level: 1, xpToNext: () => player.level*6,
+    skills: new Set(),
+    flags: { shield:false, shieldTimer:0, summoner:false, AUnit:false, BUnit:false },
+  };
+
+  // 無限地圖：玩家固定顯示在中心，其他物件以世界座標 - 相機位移繪製
+  const camera = { x: () => player.x, y: () => player.y };
+
+  // 物件容器
+  const enemies = [];        // {x,y,vx,vy,speed,size,hp,type:'normal'|'elite_sprint'|'elite_spitter'|'elite_regen'|'boss', cd?:..., alive}
+  const blades = [];         // {x,y,vx,vy,size,angle,va,damage}
+  const fires = [];          // {x,y,radius,life,maxLife}
+  const eBullets = [];       // 敵人子彈 {x,y,vx,vy,damage,life}
+  const allies = [];         // 召喚物 {x,y,vx,vy,hp,cd}
+  const aRingShots = [];     // A 機環狀子彈 {x,y,vx,vy,life,damage}
+  const lasers = [];         // B 機雷射 {x1,y1,x2,y2,life,damage}
+
+  // 其他狀態
+  let keys = {};
+  let paused = false;
+  let ended = false;
+  let score = 0;
+  let lastBladeTime = 0;
+  let frame = 0;
+
+  // ===== UI元素 =====
+  const hpBar = document.querySelector('.hp > span');
+  const xpBar = document.querySelector('.xp > span');
+  const chipLevel = document.getElementById('chipLevel');
+  const chipScore = document.getElementById('chipScore');
+  const levelUpDiv = document.getElementById('levelUp');
+  const skillOptionsDiv = document.getElementById('skillOptions');
+  const gameOverDiv = document.getElementById('gameOver');
+
+  // ===== 控制 =====
+  addEventListener('keydown', (e)=>{ keys[e.key.toLowerCase()] = true; });
+  addEventListener('keyup',   (e)=>{ keys[e.key.toLowerCase()] = false; });
+
+  // ===== 技能池 =====
+  const SKILLS = [
+    'attackSpeed',  // 攻速提升
+    'bladeCount',   // 刀刃數增加
+    'heal',         // 回血
+    'shield',       // 短時間護盾
+    'fireBomb',     // 火焰瓶
+    'summoner',     // 首位者（召喚小兵）
+    'AUnit',        // A 機（環狀子彈）
+    'BUnit'         // B 機（鎖定雷射）
+  ];
+  const skillName = s => ({
+    attackSpeed:'攻速提升', bladeCount:'刀刃數增加', heal:'回血',
+    shield:'護盾', fireBomb:'火焰瓶', summoner:'首位者（召喚）',
+    AUnit:'A 機（環狀彈）', BUnit:'B 機（雷射）'
+  }[s] || s);
+
+  function showLevelUp() {
+    paused = true;
+    levelUpDiv.style.display = 'block';
+    skillOptionsDiv.innerHTML = '';
+    // 3 個不重複的選項
+    const opts = new Set();
+    while (opts.size < 3) {
+      opts.add(SKILLS[Math.floor(Math.random()*SKILLS.length)]);
+    }
+    [...opts].forEach(s=>{
+      const btn = document.createElement('button');
+      btn.textContent = skillName(s);
+      btn.onclick = () => {
+        applySkill(s);
+        levelUpDiv.style.display = 'none';
+        paused = false;
+      };
+      skillOptionsDiv.appendChild(btn);
+    });
+  }
+
+  function applySkill(s) {
+    if (s==='heal') {
+      player.hp = Math.min(player.maxHp, player.hp+1);
+      return;
+    }
+    if (s==='shield') {
+      player.flags.shield = true;
+      player.flags.shieldTimer = 360; // 6 秒
+      return;
+    }
+    if (s==='fireBomb') {
+      fires.push({x:player.x, y:player.y, radius:70, life:420, maxLife:420});
+      return;
+    }
+    if (s==='summoner') { player.flags.summoner = true; return; }
+    if (s==='AUnit') { player.flags.AUnit = true; return; }
+    if (s==='BUnit') { player.flags.BUnit = true; return; }
+    // 其它被動技能
+    player.skills.add(s);
+  }
+
+  // ===== 工具 =====
+  const randRange = (a,b)=> a + Math.random()*(b-a);
+  const clamp = (v, a, b)=> Math.max(a, Math.min(b, v));
+  const dist = (x1,y1,x2,y2)=> Math.hypot(x1-x2,y1-y2);
+
+  function findNearestEnemy() {
+    let best=null, bestD=Infinity;
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const d = dist(player.x,player.y,e.x,e.y);
+      if (d<bestD) {best=e; bestD=d;}
+    }
+    return best;
+  }
+
+  // ===== 生成敵人（環狀在玩家外圍生成）=====
+  function spawnEnemies() {
+    if (paused || ended) return;
+    // 普通/精英
+    if (Math.random()<0.04) {
+      const r = randRange(500, 700);
+      const ang = Math.random()*Math.PI*2;
+      const x = player.x + Math.cos(ang)*r;
+      const y = player.y + Math.sin(ang)*r;
+
+      // 類型權重
+      const roll = Math.random();
+      let type='normal', hp=2, speed=1.25, size=14;
+      if (roll<0.12) { type='elite_sprint'; hp=4; speed=1.5; size=16; }
+      else if (roll<0.22) { type='elite_spitter'; hp=3; speed=1.1; size=16; }
+      else if (roll<0.28) { type='elite_regen'; hp=4; speed=1.1; size=16; }
+
+      enemies.push({x,y, speed, size, hp, type, cd:0, alive:true});
+    }
+    // Boss（屍王）
+    if (frame % (60*25) === 0) { // 每 25 秒一隻
+      const r = 750, ang = Math.random()*Math.PI*2;
+      const x = player.x + Math.cos(ang)*r;
+      const y = player.y + Math.sin(ang)*r;
+      enemies.push({x,y, speed:0.9, size:28, hp:30, type:'boss', cd:0, alive:true});
+    }
+  }
+
+  // ===== 射擊（刀刃）=====
+  function shootBlade() {
+    if (paused || ended) return;
+    if (enemies.length===0) return;
+    const now = performance.now();
+    let cd = 800;
+    if (player.skills.has('attackSpeed')) cd = 450;
+    if (now - lastBladeTime < cd) return;
+
+    const target = findNearestEnemy();
+    if (!target) return;
+
+    let count = player.skills.has('bladeCount') ? 2 : 1;
+    for (let i=0;i<count;i++) {
+      const baseAng = Math.atan2(target.y-player.y, target.x-player.x);
+      const ang = baseAng + (i-(count-1)/2)*0.18;
+      const spd = 7;
+      blades.push({
+        x: player.x, y: player.y,
+        vx: Math.cos(ang)*spd, vy: Math.sin(ang)*spd,
+        size: 6, angle: 0, va: 0.35, damage: 2
+      });
+    }
+    lastBladeTime = now;
+  }
+
+  // ===== 召喚物 / A機 / B機 行為 =====
+  function allyBehaviors() {
+    // 首位者：每 10 秒召喚 1~2 個
+    if (player.flags.summoner && frame%600===0) {
+      const n = 1 + (Math.random()<0.6?1:0);
+      for (let i=0;i<n;i++) {
+        allies.push({ x: player.x+randRange(-40,40), y: player.y+randRange(-40,40), vx:0, vy:0, hp:3, cd:0 });
+      }
+    }
+    // 召喚物簡單 AI：靠近最近敵人並發射小彈
+    for (const a of allies) {
+      a.cd--;
+      const t = findNearestEnemy();
+      if (t) {
+        const dx = t.x - a.x, dy = t.y - a.y, d = Math.hypot(dx,dy)||1;
+        a.vx = dx/d*1.6; a.vy = dy/d*1.6;
+        a.x += a.vx; a.y += a.vy;
+        if (a.cd<=0) {
+          const sp=6;
+          aRingShots.push({x:a.x,y:a.y,vx:dx/d*sp,vy:dy/d*sp,life:90,damage:1});
+          a.cd = 60;
+        }
+      }
+    }
+
+    // A 機：每 3 秒釋放一圈彈
+    if (player.flags.AUnit && frame%180===0) {
+      for (let a=0;a<360;a+=24) {
+        const rad = a*Math.PI/180, sp=5;
+        aRingShots.push({ x:player.x, y:player.y, vx:Math.cos(rad)*sp, vy:Math.sin(rad)*sp, life:120, damage:1 });
+      }
+    }
+
+    // B 機：每 2 秒雷射鎖定最近敵人
+    if (player.flags.BUnit && frame%120===0) {
+      const t = findNearestEnemy();
+      if (t) {
+        lasers.push({ x1:player.x, y1:player.y, x2:t.x, y2:t.y, life:24, damage:4 });
+        // 直接造成傷害（確保 BOSS 也吃傷害）
+        t.hp -= 4;
+        if (t.hp<=0) t.alive=false;
+      }
+    }
+  }
+
+  // ===== 更新 =====
+  function update() {
+    if (paused || ended) return;
+    frame++;
+
+    // 移動（世界座標）
+    const up = keys['w'] || keys['arrowup'];
+    const dn = keys['s'] || keys['arrowdown'];
+    const lf = keys['a'] || keys['arrowleft'];
+    const rt = keys['d'] || keys['arrowright'];
+    let vx = (rt?1:0) - (lf?1:0);
+    let vy = (dn?1:0) - (up?1:0);
+    const len = Math.hypot(vx,vy)||1;
+    vx = vx/len*player.speed;
+    vy = vy/len*player.speed;
+    player.x += vx; player.y += vy;
+
+    // 護盾計時
+    if (player.flags.shield) {
+      player.flags.shieldTimer--;
+      if (player.flags.shieldTimer<=0) player.flags.shield=false;
+    }
+
+    // 射擊
+    shootBlade();
+
+    // 刀刃移動
+    for (let i=blades.length-1;i>=0;i--) {
+      const b = blades[i];
+      b.x += b.vx; b.y += b.vy; b.angle += b.va;
+      // 刀刃壽命限制，避免無限飛
+      if (frame%600===0 || Math.abs(b.x-player.x)>1400 || Math.abs(b.y-player.y)>1400) blades.splice(i,1);
+    }
+
+    // 火焰瓶衰減
+    for (let i=fires.length-1;i>=0;i--) {
+      const f = fires[i];
+      f.life--;
+      if (f.life<=0) fires.splice(i,1);
+    }
+
+    // 生成敵人
+    spawnEnemies();
+
+    // 精英/敵人行為
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const dx = player.x - e.x, dy = player.y - e.y, d = Math.hypot(dx,dy)||1;
+      let spd = e.speed;
+
+      // 精英技能
+      if (e.type==='elite_sprint') {
+        // 週期性衝刺
+        if ((frame%180)<30) spd = e.speed*2.8;
+      } else if (e.type==='elite_spitter') {
+        // 遠程吐彈
+        e.cd--;
+        if (e.cd<=0 && d>160) {
+          const sp=3.2;
+          eBullets.push({x:e.x,y:e.y, vx:dx/d*sp, vy:dy/d*sp, damage:1, life:240});
+          e.cd = 90;
+        }
+      } else if (e.type==='elite_regen') {
+        // 低血回春（一次）
+        if (e.hp>0 && e.hp<=1 && !e.regened) {
+          e.hp += 2; e.regened = true;
+        }
+      } else if (e.type==='boss') {
+        // Boss 慢速靠近，偶爾吐彈散射
+        e.cd--;
+        if (e.cd<=0) {
+          // 散射 10 發
+          for (let a=0;a<360;a+=36) {
+            const rad=a*Math.PI/180, sp=3.4;
+            eBullets.push({x:e.x,y:e.y, vx:Math.cos(rad)*sp, vy:Math.sin(rad)*sp, damage:1, life:260});
+          }
+          e.cd = 150;
+        }
+      }
+
+      e.x += dx/d*spd;
+      e.y += dy/d*spd;
+
+      // 與玩家碰撞
+      if (d < e.size + 14) {
+        if (!player.flags.shield) player.hp = Math.max(0, player.hp-1);
+        // 非 Boss 被碰即退散一點
+        if (e.type!=='boss') e.alive=false;
+        if (player.hp<=0) return gameOver();
+      }
+
+      // 受火焰傷害
+      for (const f of fires) {
+        const inside = dist(e.x,e.y,f.x,f.y) < f.radius;
+        if (inside) {
+          // 漸層期有閃爍，仍給固定 DOT
+          e.hp -= 0.03;
+          if (e.hp<=0) e.alive=false;
+        }
+      }
+    }
+
+    // 敵人子彈
+    for (let i=eBullets.length-1;i>=0;i--) {
+      const b = eBullets[i];
+      b.x+=b.vx; b.y+=b.vy; b.life--;
+      if (b.life<=0) { eBullets.splice(i,1); continue; }
+      if (dist(b.x,b.y,player.x,player.y) < 10) {
+        if (!player.flags.shield) player.hp=Math.max(0,player.hp-b.damage);
+        eBullets.splice(i,1);
+        if (player.hp<=0) return gameOver();
+      }
+    }
+
+    // A 機 / 召喚物 / B 機
+    allyBehaviors();
+
+    // A 機環狀子彈移動
+    for (let i=aRingShots.length-1;i>=0;i--) {
+      const s = aRingShots[i];
+      s.x+=s.vx; s.y+=s.vy; s.life--;
+      if (s.life<=0) { aRingShots.splice(i,1); continue; }
+    }
+
+    // 雷射壽命
+    for (let i=lasers.length-1;i>=0;i--) {
+      lasers[i].life--;
+      if (lasers[i].life<=0) lasers.splice(i,1);
+    }
+
+    // 子彈打到敵人（刀刃 + A 機彈）
+    const hitWithDamage = (proj, e) => {
+      e.hp -= (proj.damage||1);
+      if (e.hp<=0) e.alive=false;
+    };
+
+    for (let i=enemies.length-1;i>=0;i--) {
+      const e = enemies[i];
+      if (!e.alive) { enemies.splice(i,1); score++; player.xp++; afterKill(); continue; }
+
+      // 刀刃命中
+      for (let j=blades.length-1;j>=0;j--) {
+        const b = blades[j];
+        if (dist(b.x,b.y,e.x,e.y) < e.size+6) {
+          hitWithDamage(b, e);
+          blades.splice(j,1);
+          if (!e.alive) break;
+        }
+      }
+      // A 機彈命中
+      for (let j=aRingShots.length-1;j>=0;j--) {
+        const s = aRingShots[j];
+        if (dist(s.x,s.y,e.x,e.y) < e.size+4) {
+          hitWithDamage(s,e);
+          aRingShots.splice(j,1);
+          if (!e.alive) break;
+        }
+      }
+      // 召喚物彈已共用 aRingShots，不另處理
+    }
+
+    // 昇級判定
+    if (player.xp >= player.xpToNext()) {
+      player.xp = 0; player.level++;
+      showLevelUp();
+    }
+
+    // UI
+    hpBar.style.width = `${(player.hp/player.maxHp)*100}%`;
+    xpBar.style.width = `${(player.xp/player.xpToNext())*100}%`;
+    chipLevel.textContent = `Lv ${player.level}`;
+    chipScore.textContent = `Score ${score}`;
+  }
+
+  function afterKill() {
+    // 勝利後加經驗 & 小概率掉落火焰瓶（可選）
+    // 已在 update 中處理 xp++ / score++
+  }
+
+  // ===== 繪製（將世界座標轉成螢幕座標）=====
+  function toScreen(wx, wy) {
+    return { x: wx - camera.x() + W()/2, y: wy - camera.y() + H()/2 };
+  }
+
+  function draw() {
+    // 背景格線（營造無限空間感）
+    ctx.clearRect(0,0,W(),H());
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,.06)';
+    ctx.lineWidth = 1;
+
+    const grid = 80;
+    const camx = camera.x(), camy = camera.y();
+    const startX = -((camx%grid)+grid)%grid;
+    const startY = -((camy%grid)+grid)%grid;
+    for (let x=startX; x<W(); x+=grid) {
+      ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H()); ctx.stroke();
+    }
+    for (let y=startY; y<H(); y+=grid) {
+      ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W(),y); ctx.stroke();
+    }
+    ctx.restore();
+
+    // 火焰瓶
+    for (const f of fires) {
+      const p = toScreen(f.x,f.y);
+      const t = f.life/f.maxLife;
+      ctx.beginPath();
+      ctx.fillStyle = 'orange';
+      ctx.globalAlpha = 0.35 + 0.25*Math.sin((1-t)*10);
+      ctx.arc(p.x,p.y, f.radius*(0.95+0.05*Math.sin((1-t)*12)), 0, Math.PI*2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // 敵人
+    for (const e of enemies) {
+      if (!e.alive) continue;
+      const p = toScreen(e.x,e.y);
+      ctx.beginPath();
+      ctx.fillStyle = e.type==='boss' ? '#ff3b30' : (e.type.startsWith('elite') ? '#ffb74d' : '#ffcc66');
+      ctx.arc(p.x, p.y, e.size, 0, Math.PI*2);
+      ctx.fill();
+      // 血條
+      ctx.strokeStyle='#fff'; ctx.lineWidth=1;
+      ctx.strokeRect(p.x-e.size, p.y-e.size-8, e.size*2, 4);
+      ctx.fillStyle='#4caf50';
+      const maxHp = (e.type==='boss') ? 30 : (e.type.startsWith('elite') ? 4 : 2);
+      ctx.fillRect(p.x-e.size, p.y-e.size-8, Math.max(0, (e.hp/maxHp))*e.size*2, 4);
+    }
+
+    // 敵人子彈
+    ctx.fillStyle='#ff6f61';
+    for (const b of eBullets) {
+      const p = toScreen(b.x,b.y);
+      ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+    }
+
+    // 召喚物
+    ctx.fillStyle = '#80deea';
+    for (const a of allies) {
+      const p = toScreen(a.x,a.y);
+      ctx.beginPath(); ctx.arc(p.x,p.y,6,0,Math.PI*2); ctx.fill();
+    }
+
+    // A 機子彈
+    ctx.fillStyle = '#90caf9';
+    for (const s of aRingShots) {
+      const p = toScreen(s.x,s.y);
+      ctx.beginPath(); ctx.arc(p.x,p.y,3,0,Math.PI*2); ctx.fill();
+    }
+
+    // 雷射
+    for (const l of lasers) {
+      const p1 = toScreen(l.x1,l.y1), p2 = toScreen(l.x2,l.y2);
+      ctx.strokeStyle = `rgba(173,216,230,${0.4+0.4*Math.sin(l.life/3)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(p1.x,p1.y); ctx.lineTo(p2.x,p2.y); ctx.stroke();
+    }
+
+    // 刀刃
+    for (const b of blades) {
+      const p = toScreen(b.x,b.y);
+      ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(b.angle);
+      ctx.fillStyle='#c8ff6a';
+      ctx.fillRect(-8,-2,16,4);
+      ctx.restore();
+    }
+
+    // 玩家（固定畫面中心）
+    const c = CENTER();
+    ctx.fillStyle = '#4dd0e1';
+    ctx.beginPath(); ctx.arc(c.x,c.y,14,0,Math.PI*2); ctx.fill();
+
+    // 護盾
+    if (player.flags.shield) {
+      ctx.strokeStyle='#a5d6a7'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.arc(c.x,c.y,46,0,Math.PI*2); ctx.stroke();
+    }
+  }
+
+  // ===== 遊戲結束 =====
+  function gameOver() {
+    ended = true; paused = true;
+    gameOverDiv.innerHTML = `
+      <div><b>💀 遊戲結束</b></div>
+      <div style="margin-top:8px;">分數：<b>${score}</b></div>
+      <div style="margin-top:14px;">
+        <button onclick="location.reload()">重新開始</button>
+      </div>
+    `;
+    gameOverDiv.style.display='block';
+  }
+
+  // ===== 主迴圈 =====
+  function tick() {
+    update();
+    draw();
+    requestAnimationFrame(tick);
+  }
+
+  // 初始一次升級（示範可移除）
+  // showLevelUp();
+
+  tick();
+})();
+</script>
+</body>
+</html>
