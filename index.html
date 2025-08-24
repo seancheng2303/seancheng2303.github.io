@@ -1,9 +1,88 @@
-<html>
-  <head>
-    <title>Sean's Home</title>
-  </head>
-  <body>
-    <h2>Sean's Home</h2>
-    <a href="./games/dada.html">達達特攻</a>
-  </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sean Games</title>
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Press Start 2P', cursive;
+      background: #0d0d0d;
+      color: #fff;
+      text-align: center;
+    }
+    header {
+      padding: 100px 20px;
+      background: linear-gradient(135deg, #ff2edf, #00f2ff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      font-size: 48px;
+      text-shadow: 0 0 10px #00f2ff;
+      animation: glow 2s infinite alternate;
+    }
+    @keyframes glow {
+      from { text-shadow: 0 0 5px #00f2ff; }
+      to { text-shadow: 0 0 20px #ff2edf; }
+    }
+    .games {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin: 50px auto;
+      max-width: 900px;
+    }
+    .game-card {
+      background: #1a1a1a;
+      border: 2px solid #00f2ff;
+      margin: 15px;
+      padding: 20px;
+      width: 200px;
+      transition: transform 0.3s, box-shadow 0.3s;
+      text-decoration: none; /* 去掉底線 */
+      font-width:bold;
+    }
+    .game-card:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 20px #ff2edf;
+      cursor: pointer;
+    }
+    .game-card:link,
+    .game-card:visited {
+      color: #fff;        /* 永遠保持白色 */
+      text-decoration: none; /* 不要底線 */
+    }
+    .btn {
+      display: inline-block;
+      margin-top: 30px;
+      padding: 15px 30px;
+      font-size: 16px;
+      color: #0d0d0d;
+      background: #00f2ff;
+      border: none;
+      cursor: pointer;
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 10px #00f2ff; }
+      50% { box-shadow: 0 0 25px #ff2edf; }
+      100% { box-shadow: 0 0 10px #00f2ff; }
+    }
+    footer {
+      margin-top: 50px;
+      font-size: 12px;
+      color: #888;
+    }
+  </style>
+</head>
+<body>
+  <header>Sean Games</header>
+
+  <section class="games">
+    <a href="dada.html" class="game-card">達達特攻</a>
+  </section>
+
+
+  <footer>© 2025 Sean Games</footer>
+</body>
 </html>
