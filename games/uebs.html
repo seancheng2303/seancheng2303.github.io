@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mini UEBS</title>
+  <style>
+    body { margin: 0; overflow: hidden; }
+    canvas { display: block; }
+  </style>
+</head>
+<body>
+  <!-- 引入 Three.js -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+
+  <!-- 引入 OrbitControls -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/controls/OrbitControls.js"></script>
+
+  <script>
+    // 基本場景建立
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // 控制器
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    // 地面
+    const groundGeo = new THREE.PlaneGeometry(100, 100);
+    const groundMat = new THREE.MeshBasicMaterial({ color: 0x228B22, side: THREE.DoubleSide });
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = Math.PI / 2;
+    scene.add(ground);
+
+    // 單位類別
+    class Unit {
+      constructor(x, z, color, team) {
+        this.team = team;
+        this.health = 100;
+        this.speed = 0.05;
+        this.mesh = new THREE.Mesh(
+          new THREE.BoxGeometry(1, 1, 1),
+          new THREE.MeshBasicMaterial({ color })
+        );
+        this.mesh.position.set(x, 0.5, z);
+        scene.add(this.mesh);
+      }
+
+      update(enemies) {
+        if (this.health <= 0) return;
+
+        const nearest = enemies.find(e => e.health > 0);
+        if (!nearest) return;
+
+        const dx = nearest.mesh.position.x - this.mesh.position.x;
+        const dz = nearest.mesh.position.z - this.mesh.position.z;
+        const dist = Math.sqrt(dx * dx + dz * dz);
+
+        if (dist > 2) {
+          this.mesh.position.x += this.speed * dx / dist;
+          this.mesh.position.z += this.speed * dz / dist;
+        } else {
+          nearest.health -= 0.5;
+        }
+      }
+    }
+
+    // 建立單位
+    const redArmy = [];
+    const blueArmy = [];
+
+    for (let i = 0; i < 20; i++) {
+      redArmy.push(new Unit(-20 + i, -10, 0xff0000, "red"));
+      blueArmy.push(new Unit(-20 + i, 10, 0x0000ff, "blue"));
+    }
+
+    // 攝影機位置
+    camera.position.set(0, 40, 40);
+    controls.update();
+
+    // 遊戲主迴圈
+    function animate() {
+      requestAnimationFrame(animate);
+      for (let red of redArmy) red.update(blueArmy);
+      for (let blue of blueArmy) blue.update(redArmy);
+      renderer.render(scene, camera);
+    }
+
+    animate();
+  </script>
+</body>
+</html>
