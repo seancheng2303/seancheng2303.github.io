@@ -10,13 +10,11 @@
   </style>
 </head>
 <body>
-  <!-- 引入 Three.js -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/build/three.min.js"></script>
+  <!-- 引入 Three.js 和 OrbitControls 作為 ES 模組 -->
+  <script type="module">
+    import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.150.0/build/three.module.js';
+    import { OrbitControls } from 'https://cdn.jsdelivr.net/npm/three@0.150.0/examples/js/controls/OrbitControls.js';
 
-  <!-- 引入 OrbitControls -->
-  <script src="https://cdn.jsdelivr.net/npm/three@0.155.0/examples/js/controls/OrbitControls.js"></script>
-
-  <script>
     // 基本場景建立
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -25,7 +23,7 @@
     document.body.appendChild(renderer.domElement);
 
     // 控制器
-    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    const controls = new OrbitControls(camera, renderer.domElement);
 
     // 地面
     const groundGeo = new THREE.PlaneGeometry(100, 100);
