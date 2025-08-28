@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <title>圈圈叉叉：無敵電腦</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      background-color: #f0f0f0;
+    }
+    h1 {
+      margin-top: 40px;
+    }
+    #game {
+      display: grid;
+      grid-template-columns: repeat(3, 100px);
+      grid-gap: 5px;
+      justify-content: center;
+      margin-top: 30px;
+    }
+    .cell {
+      width: 100px;
+      height: 100px;
+      font-size: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: white;
+      border: 2px solid #333;
+      cursor: pointer;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 24px;
+    }
+    #restart {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>圈圈叉叉：無敵電腦</h1>
+  <div id="game"></div>
+  <div id="status"></div>
+  <button id="restart">重新開始</button>
+
+  <script>
+    const game = document.getElementById('game');
+    const status = document.getElementById('status');
+    const restartBtn = document.getElementById('restart');
+
+    let board = ['', '', '', '', '', '', '', '', ''];
+    const player = 'X';  // 玩家
+    const ai = 'O';      // 電腦
+    let currentPlayer = player;
+    let gameActive = true;
+
+    const winningConditions = [
+      [0,1,2], [3,4,5], [6,7,8], // rows
+      [0,3,6], [1,4,7], [2,5,8], // columns
+      [0,4,8], [2,4,6]           // diagonals
+    ];
+
+    function createBoard() {
+      game.innerHTML = '';
+      board.forEach((cell, index) => {
+        const cellDiv = document.createElement('div');
+        cellDiv.classList.add('cell');
+        cellDiv.dataset.index = index;
+        cellDiv.textContent = cell;
+        cellDiv.addEventListener('click', handleCellClick);
+        game.appendChild(cellDiv);
+      });
+    }
+
+    function handleCellClick(e) {
+      const index = e.target.dataset.index;
+      if (board[index] !== '' || !gameActive || currentPlayer !== player) return;
+
+      makeMove(index, player);
+      if (checkGameOver()) return;
+
+      setTimeout(() => {
+        const bestMove = getBestMove();
+        makeMove(bestMove, ai);
+        checkGameOver();
+      }, 300); // 模擬思考時間
+    }
+
+    function makeMove(index, symbol) {
+      board[index] = symbol;
+      document.querySelector(`[data-index='${index}']`).textContent = symbol;
+      currentPlayer = symbol === player ? ai : player;
+      if (gameActive) {
+        status.textContent = `輪到玩家 ${currentPlayer}`;
+      }
+    }
+
+    function checkWin(symbol) {
+      return winningConditions.some(condition => {
+        const [a, b, c] = condition;
+        return board[a] === symbol && board[b] === symbol && board[c] === symbol;
+      });
+    }
+
+    function checkGameOver() {
+      if (checkWin(player)) {
+        status.textContent = "你贏了！🎉";
+        gameActive = false;
+        return true;
+      } else if (checkWin(ai)) {
+        status.textContent = "電腦贏了！😢";
+        gameActive = false;
+        return true;
+      } else if (!board.includes('')) {
+        status.textContent = "平手！";
+        gameActive = false;
+        return true;
+      }
+      return false;
+    }
+
+    function getBestMove() {
+      let bestScore = -Infinity;
+      let move;
+      board.forEach((cell, index) => {
+        if (cell === '') {
+          board[index] = ai;
+          let score = minimax(board, 0, false);
+          board[index] = '';
+          if (score > bestScore) {
+            bestScore = score;
+            move = index;
+          }
+        }
+      });
+      return move;
+    }
+
+    function minimax(boardState, depth, isMaximizing) {
+      if (checkWin(ai)) return 10 - depth;
+      if (checkWin(player)) return depth - 10;
+      if (!boardState.includes('')) return 0;
+
+      if (isMaximizing) {
+        let bestScore = -Infinity;
+        boardState.forEach((cell, index) => {
+          if (cell === '') {
+            boardState[index] = ai;
+            let score = minimax(boardState, depth + 1, false);
+            boardState[index] = '';
+            bestScore = Math.max(score, bestScore);
+          }
+        });
+        return bestScore;
+      } else {
+        let bestScore = Infinity;
+        boardState.forEach((cell, index) => {
+          if (cell === '') {
+            boardState[index] = player;
+            let score = minimax(boardState, depth + 1, true);
+            boardState[index] = '';
+            bestScore = Math.min(score, bestScore);
+          }
+        });
+        return bestScore;
+      }
+    }
+
+    function restartGame() {
+      board = ['', '', '', '', '', '', '', '', ''];
+      currentPlayer = player;
+      gameActive = true;
+      status.textContent = `輪到玩家 ${currentPlayer}`;
+      createBoard();
+    }
+
+    restartBtn.addEventListener('click', restartGame);
+    restartGame(); // 初始化
+  </script>
+
+</body>
+</html>
