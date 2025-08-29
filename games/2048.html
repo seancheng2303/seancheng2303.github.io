@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>2048 with Stable Animation</title>
+<style>
+:root{
+  --bg:#faf8ef; --board:#bbada0; --empty:#cdc1b4; --tile:#eee4da;
+  --text:#776e65; --light:#f9f6f2; --accent:#8f7a66; --btn:#8f7a66; --btn2:#3c3a32;
+  --gap:12px; --radius:10px;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; display:grid; place-items:center; background:var(--bg);
+  font-family: system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,"Noto Sans";
+  color:var(--text);
+}
+.wrap{width:min(94vw,520px)}
+header{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; margin-bottom:14px}
+h1{margin:0; font-size:38px; line-height:1; color:#776e65}
+.scores{display:flex; gap:10px}
+.score, .best{background:#bbada0; color:var(--light); padding:8px 12px; border-radius:8px; text-align:center; min-width:86px}
+.score small, .best small{display:block; font-size:12px; opacity:.9}
+.score b, .best b{display:block; font-size:20px; margin-top:2px}
+.controls{display:flex; gap:8px; flex-wrap:wrap}
+.controls button{border:0; border-radius:8px; padding:10px 14px; cursor:pointer; color:white; font-weight:700}
+.btn-new{background:var(--btn)}
+.btn-undo{background:var(--btn2)}
+.board{
+  position:relative; background:var(--board); border-radius:var(--radius);
+  padding:var(--gap); width:min(94vw,520px);
+  aspect-ratio:1/1; user-select:none; touch-action:none;
+}
+.grid{
+  position:absolute; inset:var(--gap); display:grid; grid-template-columns:repeat(4,1fr); grid-template-rows:repeat(4,1fr); gap:var(--gap)
+}
+.cell{background:var(--empty); border-radius:var(--radius)}
+.tiles{position:absolute; inset:var(--gap)}
+.tile{
+  position:absolute; display:grid; place-items:center; font-weight:900; border-radius:var(--radius);
+  width:calc((100% - var(--gap)*3)/4); height:calc((100% - var(--gap)*3)/4);
+  transform:translate(var(--x), var(--y));
+  transition: transform 0.15s ease-in-out;
+  box-shadow:0 6px 12px rgba(0,0,0,.08);
+  font-size:clamp(18px, 5.5vw, 32px); color:var(--text); background:var(--tile);
+}
+.tile.new{animation:pop 0.12s ease}
+.tile.merged{animation:merge 0.15s ease}
+@keyframes pop{from{transform: scale(0.6);} to{transform: scale(1);}}
+@keyframes merge{0%{transform: scale(1.1);} 100%{transform: scale(1);}}
+.v2{background:#eee4da}
+.v4{background:#ede0c8}
+.v8{background:#f2b179; color:var(--light)}
+.v16{background:#f59563; color:var(--light)}
+.v32{background:#f67c5f; color:var(--light)}
+.v64{background:#f65e3b; color:var(--light)}
+.v128{background:#edcf72; color:var(--light)}
+.v256{background:#edcc61; color:var(--light)}
+.v512{background:#edc850; color:var(--light)}
+.v1024{background:#edc53f; color:var(--light)}
+.v2048{background:#edc22e; color:var(--light)}
+.overlay{
+  position:absolute; inset:0; display:none; place-items:center; background:rgba(238,228,218,.75);
+  border-radius:var(--radius); text-align:center; padding:20px
+}
+.overlay.show{display:grid}
+.overlay .panel{
+  background:white; border-radius:12px; padding:18px; width:min(90%,360px); box-shadow:0 12px 24px rgba(0,0,0,.12)
+}
+.panel h2{margin:0 0 4px}
+.panel p{margin:6px 0 14px; color:#6b655f}
+.panel .row{display:flex; gap:10px; justify-content:center}
+.panel button{padding:10px 14px; border:0; border-radius:8px; color:white; font-weight:800; cursor:pointer}
+.panel .again{background:var(--btn)}
+.panel .keep{background:#3d9970}
+footer{margin-top:10px; font-size:12px; opacity:.7; text-align:center}
+@media (max-width:420px){h1{font-size:32px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div>
+    <h1>2048</h1>
+    <div class="controls">
+      <button class="btn-new" id="newGame">重新開始</button>
+      <button class="btn-undo" id="undoBtn" title="復原上一步 (Z)">復原</button>
+    </div>
+  </div>
+  <div class="scores">
+    <div class="score"><small>分數</small><b id="score">0</b></div>
+    <div class="best"><small>最佳</small><b id="best">0</b></div>
+  </div>
+</header>
+
+<div class="board" id="board">
+  <div class="grid" aria-hidden="true">
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+    <div class="cell"></div><div class="cell"></div><div class="cell"></div><div class="cell"></div>
+  </div>
+  <div class="tiles" id="tiles"></div>
+  <div class="overlay" id="overlay" role="dialog" aria-modal="true">
+    <div class="panel">
+      <h2 id="endTitle">你贏了！</h2>
+      <p id="endMsg">已合成 2048！</p>
+      <div class="row" id="winButtons">
+        <button class="keep" id="keepPlaying">繼續挑戰</button>
+        <button class="again" id="playAgain1">重新開始</button>
+      </div>
+      <div class="row" id="loseButtons" style="display:none">
+        <button class="again" id="playAgain2">再來一局</button>
+      </div>
+    </div>
+  </div>
+</div>
+<footer>鍵盤：↑↓←→ 或 WASD；手機：滑動操作；復原：Z</footer>
+</div>
+
+<script>
+(function(){
+const SIZE=4,PROB_4=0.1,WIN_VALUE=2048;
+let board=createEmpty(),score=0,best=Number(localStorage.getItem('bestScore2048')||0),keepPlayingMode=false,lastSnapshot=null,nextTileId=0;
+
+const tilesLayer=document.getElementById('tiles'),
+scoreEl=document.getElementById('score'),
+bestEl=document.getElementById('best'),
+overlay=document.getElementById('overlay'),
+endTitle=document.getElementById('endTitle'),
+endMsg=document.getElementById('endMsg'),
+winButtons=document.getElementById('winButtons'),
+loseButtons=document.getElementById('loseButtons');
+
+document.getElementById('newGame').addEventListener('click', newGame);
+document.getElementById('playAgain1').addEventListener('click', newGame);
+document.getElementById('playAgain2').addEventListener('click', newGame);
+document.getElementById('keepPlaying').addEventListener('click', ()=>{ overlay.classList.remove('show'); keepPlayingMode=true; });
+document.getElementById('undoBtn').addEventListener('click', undo);
+bestEl.textContent = best.toString();
+newGame();
+
+window.addEventListener('keydown', e=>{
+  const key=e.key.toLowerCase();
+  if(['arrowup','w','arrowdown','s','arrowleft','a','arrowright','d','z'].includes(key)) e.preventDefault();
+  if(key==='z') return undo();
+  const dir=(key==='arrowup'||key==='w')?'up':(key==='arrowdown'||key==='s')?'down':(key==='arrowleft'||key==='a')?'left':(key==='arrowright'||key==='d')?'right':null;
+  if(dir) move(dir);
+},{passive:false});
+
+let touchStart=null;
+const boardEl=document.getElementById('board');
+boardEl.addEventListener('touchstart', e=>{ if(e.touches.length!==1) return; const t=e.touches[0]; touchStart={x:t.clientX,y:t.clientY,t:Date.now()}; },{passive:true});
+boardEl.addEventListener('touchmove', e=>{e.preventDefault();},{passive:false});
+boardEl.addEventListener('touchend', e=>{
+  if(!touchStart) return;
+  const t=e.changedTouches[0];
+  const dx=t.clientX-touchStart.x,dy=t.clientY-touchStart.y;
+  const adx=Math.abs(dx),ady=Math.abs(dy);
+  const dist=Math.hypot(dx,dy);
+  const dt=Date.now()-touchStart.t;
+  touchStart=null;
+  if(dist<24||dt>600) return;
+  move(adx>ady?(dx>0?'right':'left'):(dy>0?'down':'up'));
+});
+
+function newGame(){
+  overlay.classList.remove('show');
+  keepPlayingMode=false;
+  board=createEmpty();
+  score=0;
+  lastSnapshot=null;
+  nextTileId=0;
+  addRandomTile(); addRandomTile();
+  render(true);
+  updateScore(0);
+}
+
+function undo(){
+  if(!lastSnapshot) return;
+  ({board,score,nextTileId}=deepCopy(lastSnapshot));
+  lastSnapshot=null;
+  render(true);
+  updateScore(0,true);
+}
+
+function move(direction){
+  const snapshot=deepCopy({board,score,nextTileId});
+  const {moved,mergedScore}=shiftAndMerge(board,direction);
+  if(!moved) return;
+  lastSnapshot=snapshot;
+  updateScore(mergedScore);
+  addRandomTile();
+  render();
+  checkEnd();
+}
+
+function checkEnd(){
+  const max=maxValue(board);
+  if(max>=WIN_VALUE && !keepPlayingMode){
+    endTitle.textContent='你贏了！';
+    endMsg.textContent=`已合成 ${WIN_VALUE}！繼續挑戰更高數字？`;
+    winButtons.style.display=''; loseButtons.style.display='none';
+    overlay.classList.add('show'); return;
+  }
+  if(!hasMoves(board)){
+    endTitle.textContent='遊戲結束';
+    endMsg.textContent='已無可移動的步數';
+    winButtons.style.display='none'; loseButtons.style.display='';
+    overlay.classList.add('show');
+  }
+}
+
+function createEmpty(){ return Array.from({length:SIZE}, ()=>Array(SIZE).fill(0)); }
+function addRandomTile(){
+  const empties=[]; for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(board[r][c]===0) empties.push([r,c]);
+  if(!empties.length) return;
+  const [r,c]=empties[(Math.random()*empties.length)|0];
+  const value = Math.random()<PROB_4?4:2;
+  board[r][c] = {value, id: nextTileId++};
+}
+
+function shiftAndMerge(b,dir){
+  const coords=[];
+  if(dir==='left'||dir==='right'){
+    for(let r=0;r<SIZE;r++){
+      const cols=[...Array(SIZE).keys()]; if(dir==='right') cols.reverse();
+      for(const c of cols) coords.push([r,c]);
+    }
+  }else{
+    for(let c=0;c<SIZE;c++){
+      const rows=[...Array(SIZE).keys()]; if(dir==='down') rows.reverse();
+      for(const r of rows) coords.push([r,c]);
+    }
+  }
+  const vec=dir==='left'?[0,-1]:dir==='right'?[0,1]:dir==='up'?[-1,0]:[1,0];
+  let moved=false,gained=0;
+  for(const [r,c] of coords){
+    const cell=b[r][c];
+    if(!cell) continue;
+    let nr=r,nc=c;
+    while(true){
+      const tr=nr+vec[0],tc=nc+vec[1];
+      if(tr<0||tr>=SIZE||tc<0||tc>=SIZE) break;
+      const target=b[tr][tc];
+      if(!target){
+        b[tr][tc]=cell; b[nr][nc]=0; nr=tr; nc=tc; moved=true;
+      }else if(target.value===cell.value && !target.merged){
+        target.value *= 2; target.merged = true; b[nr][nc]=0; gained += target.value; moved=true; break;
+      }else break;
+    }
+  }
+  // 清除 merged 標記
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(b[r][c] && b[r][c].merged) delete b[r][c].merged;
+  return {moved,mergedScore:gained};
+}
+
+function hasMoves(b){
+  for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++){
+    const cell=b[r][c];
+    if(!cell) return true;
+    const v=cell.value;
+    if(r+1<SIZE && b[r+1][c] && b[r+1][c].value===v) return true;
+    if(c+1<SIZE && b[r][c+1] && b[r][c+1].value===v) return true;
+  }
+  return false;
+}
+
+function maxValue(b){ let m=0; for(let r=0;r<SIZE;r++) for(let c=0;c<SIZE;c++) if(b[r][c] && b[r][c].value>m) m=b[r][c].value; return m; }
+function deepCopy(obj){ return JSON.parse(JSON.stringify(obj)); }
+
+function updateScore(delta,isUndo=false){
+  if(delta) score+=delta;
+  scoreEl.textContent=score.toString();
+  if(score>best&&!isUndo){ best=score; localStorage.setItem('bestScore2048',String(score)); bestEl.textContent=score.toString();}
+}
+
+function render(){
+  const W=tilesLayer.clientWidth;
+  const gap=parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--gap'))||12;
+  const cellSize=(W-gap*3)/4;
+  const existing=new Map();
+  tilesLayer.querySelectorAll('.tile').forEach(el=>existing.set(el.dataset.id,el));
+
+  for(let r=0;r<SIZE;r++){
+    for(let c=0;c<SIZE;c++){
+      const cell=board[r][c];
+      if(!cell) continue;
+      const key=cell.id;
+      let tile=existing.get(key);
+      if(!tile){
+        tile=document.createElement('div');
+        tile.className=`tile v${cell.value} new`;
+        tile.textContent=cell.value;
+        tile.dataset.id=key;
+        tilesLayer.appendChild(tile);
+        requestAnimationFrame(()=>tile.classList.remove('new'));
+      }else{
+        tile.textContent=cell.value;
+      }
+      tile.style.setProperty('--x',`${c*(cellSize+gap)}px`);
+      tile.style.setProperty('--y',`${r*(cellSize+gap)}px`);
+      existing.delete(key);
+    }
+  }
+  // 移除不存在的 tile
+  existing.forEach(el=>el.remove());
+}
+
+window.addEventListener('resize', ()=>render());
+})();
+</script>
+</body>
+</html>
