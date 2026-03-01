@@ -19,7 +19,11 @@ const menuData = [
       {
         text: 'OOXX',
         link: 'games/OOXX.html'
-      }
+      },
+      {
+        text: 'running',
+        link: 'games/running.html'
+      },
     ]
   },
   {
