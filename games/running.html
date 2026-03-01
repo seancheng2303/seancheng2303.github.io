@@ -71,25 +71,27 @@
   </div>
 
   <script>
-    // 取用 DOM
+    // DOM
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreEl = document.getElementById('score');
     const restartBtn = document.getElementById('restartBtn');
 
-    // 固定畫布大小（可按需求調整）
+    // canvas size
     canvas.width = 800;
     canvas.height = 450;
 
-    // 遊戲狀態
+    // speed config
     let score = 0;
-    let gameSpeed = 5;
+    const baseSpeed = 2;    // start slow
+    const maxSpeed = 12;    // cap
+    let gameSpeed = baseSpeed;
+
     let isGameOver = false;
     let frame = 0;
     const gravity = 0.8;
     const floorY = 350;
 
-    // 1. 角色物件 (新增 size 狀態)
     const player = {
         x: 100,
         y: floorY - 50,
@@ -99,13 +101,12 @@
         height: 50,
         dy: 0,
         jumpForce: -15,
-        grounded: true, // 預設站在地板上
-        isBig: false, // 瑪利歐變大狀態
+        grounded: true,
+        isBig: false,
 
         draw() {
-            ctx.fillStyle = this.isBig ? "#2ecc71" : "#555"; // 變大換個色
+            ctx.fillStyle = this.isBig ? "#2ecc71" : "#555";
             ctx.fillRect(this.x, this.y, this.width, this.height);
-            // 畫眼睛
             ctx.fillStyle = "white";
             ctx.fillRect(this.x + (this.isBig ? 30 : 25), this.y + 10, 5, 5);
         },
@@ -139,30 +140,25 @@
         }
     };
 
-    // 2. 遊戲元素陣列
     let enemies = [];
     let items = [];
     let blocks = [];
 
-    // --- 類別設計 ---
-
-    // 怪物 (像 Goomba)
     class Enemy {
         constructor() {
             this.width = 30;
             this.height = 30;
             this.x = canvas.width;
             this.y = floorY - this.height;
-            this.speed = gameSpeed + 1;
         }
         update() {
-            this.x -= this.speed;
-            ctx.fillStyle = "#8e44ad"; // 紫色怪物
+            // follow dynamic gameSpeed so existing enemies accelerate too
+            this.x -= (gameSpeed + 1);
+            ctx.fillStyle = "#8e44ad";
             ctx.fillRect(this.x, this.y, this.width, this.height);
         }
     }
 
-    // 問號磚塊
     class Block {
         constructor() {
             this.x = canvas.width;
@@ -173,7 +169,7 @@
         }
         update() {
             this.x -= gameSpeed;
-            ctx.fillStyle = this.used ? "#bdc3c7" : "#f39c12"; 
+            ctx.fillStyle = this.used ? "#bdc3c7" : "#f39c12";
             ctx.fillRect(this.x, this.y, this.width, this.height);
             if(!this.used) {
                 ctx.fillStyle = "white";
@@ -183,7 +179,6 @@
         }
     }
 
-    // 蘑菇道具
     class Mushroom {
         constructor(x, y) {
             this.x = x;
@@ -192,34 +187,39 @@
             this.height = 30;
         }
         update() {
-            this.x -= (gameSpeed - 1);
-            ctx.fillStyle = "#e74c3c"; // 紅色蘑菇
+            // ensure mushroom still moves even if gameSpeed small
+            const mv = Math.max(0.5, gameSpeed - 1);
+            this.x -= mv;
+            ctx.fillStyle = "#e74c3c";
             ctx.beginPath();
             ctx.arc(this.x + 15, this.y + 15, 15, 0, Math.PI * 2);
             ctx.fill();
         }
     }
 
-    // 3. 核心邏輯
+    function recalcSpeed() {
+        // Smooth scaling: increase speed with score; adjust divisor to tune
+        gameSpeed = Math.min(maxSpeed, baseSpeed + score / 200);
+    }
+
     function gameLoop() {
         if (isGameOver) return showGameOver();
 
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        // recalc speed based on current score
+        recalcSpeed();
 
-        // 繪製地板
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#714e3b";
         ctx.fillRect(0, floorY, canvas.width, 50);
 
         player.update();
 
-        // 隨機生成 (frame 基礎)
-        if (frame % 150 === 0) enemies.push(new Enemy());
-        if (frame % 250 === 0) blocks.push(new Block());
+        // spawn logic (can use frame and gameSpeed to alter spawn rate)
+        if (frame % Math.max(60, Math.floor(150 - gameSpeed * 5)) === 0) enemies.push(new Enemy());
+        if (frame % Math.max(120, Math.floor(250 - gameSpeed * 8)) === 0) blocks.push(new Block());
 
-        // 處理磚塊
         blocks.forEach((b, i) => {
             b.update();
-            // 碰撞偵測: 玩家頭部撞擊磚塊底部
             if (!b.used && player.dy < 0 &&
                 player.x < b.x + b.width && player.x + player.width > b.x &&
                 player.y < b.y + b.height && player.y > b.y) {
@@ -230,7 +230,6 @@
             if (b.x + b.width < 0) blocks.splice(i, 1);
         });
 
-        // 處理蘑菇
         items.forEach((m, i) => {
             m.update();
             if (player.x < m.x + m.width && player.x + player.width > m.x &&
@@ -238,17 +237,17 @@
                 player.grow();
                 items.splice(i, 1);
             }
+            if (m.x + m.width < 0) items.splice(i, 1);
         });
 
-        // 處理怪物
         enemies.forEach((en, i) => {
             en.update();
             if (player.x < en.x + en.width && player.x + player.width > en.x &&
-                player.y < en.y + en.height && player.y + player.height > en.y) {
+                player.y < en.y + en.height && player.y + en.height > en.y) {
 
                 if (player.isBig) {
                     player.shrink();
-                    enemies.splice(i, 1); // 碰到怪物變小，怪物消失
+                    enemies.splice(i, 1);
                 } else {
                     isGameOver = true;
                 }
@@ -272,36 +271,34 @@
         ctx.font = "40px Arial";
         ctx.fillText("GAME OVER", canvas.width/2, canvas.height/2);
         ctx.font = "20px Arial";
-        ctx.fillText("按下 R 或按下畫面上的重新開始來重新開始", canvas.width/2, canvas.height/2 + 50);
+        ctx.fillText("按下 R 或畫面上的重新開始來重新開始", canvas.width/2, canvas.height/2 + 50);
     }
 
-    // 鍵盤事件
     window.addEventListener('keydown', (e) => {
         if ((e.code === 'Space' || e.code === 'ArrowUp') && player.grounded) {
             player.dy = player.jumpForce;
         }
-        if (e.code === 'KeyR' && isGameOver) {
-            location.reload();
-        }
+        if (e.code === 'KeyR' && isGameOver) restartGame();
     });
 
-    // 重新開始按鈕（不 reload 頁面，直接重設狀態）
-    restartBtn.addEventListener('click', () => {
-      // 重新初始化遊戲狀態
-      score = 0;
-      isGameOver = false;
-      frame = 0;
-      enemies = [];
-      items = [];
-      blocks = [];
-      player.x = 100;
-      player.y = floorY - player.height;
-      player.dy = 0;
-      player.shrink();
-      requestAnimationFrame(gameLoop);
-    });
+    function restartGame() {
+        score = 0;
+        isGameOver = false;
+        frame = 0;
+        enemies = [];
+        items = [];
+        blocks = [];
+        player.x = 100;
+        player.y = floorY - player.height;
+        player.dy = 0;
+        player.shrink();
+        gameSpeed = baseSpeed;
+        requestAnimationFrame(gameLoop);
+    }
 
-    // 啟動遊戲
+    restartBtn.addEventListener('click', restartGame);
+
+    // start
     requestAnimationFrame(gameLoop);
   </script>
 </body>
