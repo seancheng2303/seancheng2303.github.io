@@ -24,6 +24,10 @@ const menuData = [
         text: 'running',
         link: 'games/running.html'
       }
+      {
+        text: 'cell',
+        link: 'games/cell.html'
+      }
     ]
   },
   {
