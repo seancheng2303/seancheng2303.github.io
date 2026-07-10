@@ -1,491 +1,411 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <title>免疫防線：細胞大戰病毒</title>
-    <style>
-        body {
-            margin: 0; background-color: #08080c; color: white;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            height: 100vh; overflow: hidden; touch-action: none;
-            -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
-        }
-        canvas { background-color: #0b0b12; display: none; }
-        
-        /* 角色選擇介面 */
-        #charSelectScreen {
-            position: absolute; display: flex; flex-direction: column; align-items: center;
-            justify-content: center; background: #0f0f1a; width: 100%; height: 100vh; z-index: 30;
-        }
-        .card-container { display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; max-width: 90%; }
-        .char-card {
-            background: #161626; border: 2px solid #333; border-radius: 12px; padding: 15px;
-            width: 240px; text-align: center; cursor: pointer; transition: 0.2s;
-        }
-        .char-card:hover { border-color: #00adb5; transform: scale(1.03); }
-        .char-card h3 { margin: 5px 0; font-size: 18px; }
-        .char-card p { font-size: 13px; color: #aaa; line-height: 1.4; }
-        
-        /* 遊戲內 UI */
-        #ui {
-            position: absolute; top: 10px; left: 10px; right: 10px;
-            display: none; justify-content: space-between; align-items: center;
-            font-size: 16px; font-weight: bold; pointer-events: none;
-            text-shadow: 0 0 8px #00adb5; z-index: 10;
-        }
-        .bar-container {
-            position: absolute; left: 10px; right: 10px; height: 6px; border-radius: 3px; overflow: hidden; display: none;
-        }
-        #xpContainer { top: 40px; background: rgba(255,255,255,0.1); }
-        #xpBar { width: 0%; height: 100%; background: #00ff66; transition: 0.1s; }
-        #hpContainer { top: 50px; background: rgba(255,0,0,0.2); }
-        #hpBar { width: 100%; height: 100%; background: #ff2e63; transition: 0.1s; }
-        
-        #upgradeMenu {
-            display: none; position: absolute; background: rgba(15, 15, 28, 0.96); 
-            width: 85%; max-width: 420px; border: 2px solid #00adb5; padding: 20px; 
-            border-radius: 15px; text-align: center; box-shadow: 0 0 40px rgba(0, 173, 181, 0.5); z-index: 20;
-        }
-        .btn {
-            background: linear-gradient(135deg, #00adb5, #007a80); color: white; border: none; 
-            padding: 14px; margin: 10px 0; font-size: 15px; cursor: pointer; border-radius: 10px;
-            font-weight: bold; width: 100%; transition: 0.2s; box-shadow: 0 4px #005a60;
-        }
-    </style>
-</head>
-<body>
+/**
+ * 《細胞倖存者：究極進化》核心遊戲引擎
+ * 適用於 HTML5 Canvas 2D 
+ */
 
-<div id="charSelectScreen">
-    <h2 style="color: #00adb5; margin-bottom: 25px; text-shadow: 0 0 10px rgba(0,173,181,0.5);">🧬 選擇你的免疫細胞</h2>
-    <div class="card-container">
-        <div class="char-card" onclick="selectCharacter('neutrophil')">
-            <h3 style="color: #00adb5;">🎯 嗜中性球</h3>
-            <p style="color: #00ff66; font-weight:bold;">定位：平衡遠程</p>
-            <p>武器：活性氧彈 (高頻單體)<br>特性：擊殺病毒時有 15% 機率直接吞噬，額外獲得經驗值。</p>
-        </div>
-        <div class="char-card" onclick="selectCharacter('macrophage')">
-            <h3 style="color: #ff9f43;">🛡️ 巨噬細胞</h3>
-            <p style="color: #00ff66; font-weight:bold;">定位：陣地坦克</p>
-            <p>武器：偽足掃擊 (周圍群攻)<br>特性：體型較大、血量極高 (+50)，且擁有更大的經驗吸收範圍。</p>
-        </div>
-        <div class="char-card" onclick="selectCharacter('killerT')">
-            <h3 style="color: #ff2e63;">⚡ 殺手 T 細胞</h3>
-            <p style="color: #00ff66; font-weight:bold;">定位：高爆刺客</p>
-            <p>武器：穿孔素穿刺 (直線貫穿)<br>特性：移動速度極快 (+20%)，對低血量病毒造成雙倍傷害。</p>
-        </div>
-    </div>
-</div>
-
-<div id="ui">
-    <div>⏱️ <span id="gameTime">00:00</span></div>
-    <div>LV <span id="level">1</span> (<span id="charName">細胞</span>)</div>
-    <div>💀 <span id="kills">0</span></div>
-</div>
-<div id="xpContainer" class="bar-container"><div id="xpBar"></div></div>
-<div id="hpContainer" class="bar-container"><div id="hpBar"></div></div>
-
-<canvas id="gameCanvas"></canvas>
-
-<div id="upgradeMenu">
-    <h3 style="color: #00adb5; margin-top: 0;">🧬 免疫基因突變</h3>
-    <div id="options"></div>
-</div>
-
-<script>
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
-
-let startTime, elapsedTime = 0, isPaused = false, kills = 0, gameStarted = false;
-let bullets = [], enemyBullets = [], enemies = [], xps = [], acids = [];
-let laserTimer = 0, isLaserFiring = false, laserAngle = 0, shieldAngle = 0, freezeTimer = 0, acidTimer = 0;
-
-// === 虛擬搖桿 (固定在右下角) ===
-const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 55, vx: 0, vy: 0 };
-
-function resizeCanvas() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-    joystick.startX = canvas.width - 100;
-    joystick.startY = canvas.height - 100;
-    if(!joystick.active) { joystick.curX = joystick.startX; joystick.curY = joystick.startY; }
-}
-window.addEventListener('resize', resizeCanvas);
-
-// === 玩家初始基礎數值 ===
-const player = {
-    x: 0, y: 0, radius: 18, speed: 3.4, color: '#00adb5', type: '',
-    hp: 100, maxHp: 100, level: 1, xp: 0, xpNeeded: 100, lastShot: 0,
-    bulletCount: 1, novaLevel: 0, laserLevel: 0, shieldLevel: 0, acidLevel: 0, freezeLevel: 0, magnetLevel: 0,
-    lastNova: 0, magnetRange: 80
+// --- 1. 資源與路徑設定 ---
+const ASSET_PATHS = {
+    neutrophil: "asset/cell/cell_neutrophil.png",
+    macrophage: "asset/cell/cell_macrophage.png",
+    killer_t: "asset/cell/cell_killer_t.png",
+    adeno: "asset/cell/virus_adeno.png",
+    noro: "asset/cell/virus_noro.png",
+    phage: "asset/cell/virus_phage.png",
+    amoeba: "asset/cell/microbe_amoeba.png",
+    corona: "asset/cell/virus_corona.png"
 };
-const camera = { x: 0, y: 0 };
 
-// === 1. 角色選擇系統 ===
-function selectCharacter(type) {
-    player.type = type;
-    gameStarted = true;
-    startTime = Date.now();
+const IMAGES = {};
+
+// --- 2. 角色與怪物設定資料庫 (來自規格書) ---
+const CHARACTER_DB = {
+    neutrophil: { name: "🎯 嗜中性球", r: 18, speed: 3.4, maxHp: 100, weapon: "活性氧彈", talent: "細胞吞噬" },
+    macrophage: { name: "🛡️ 巨噬細胞", r: 23, speed: 2.9, maxHp: 150, weapon: "偽足掃擊", talent: "趨化引力" },
+    killer_t: { name: "⚡ 殺手 T 細胞", r: 18, speed: 4.1, maxHp: 100, weapon: "穿孔素穿刺", talent: "凋亡指令" }
+};
+
+const ENEMY_DB = [
+    { type: "adeno", name: "🟢 腺病毒", time: 0, hp: 1, dmg: 10, speed: 1.3, r: 8 },
+    { type: "noro", name: "🔴 諾羅病毒", time: 20, hp: 1, dmg: 15, speed: 2.4, r: 10 },
+    { type: "phage", name: "🟠 噬菌體", time: 55, hp: 3, dmg: 22, speed: 0.9, r: 14 },
+    { type: "amoeba", name: "🔮 變形蟲", time: 90, hp: 7, dmg: 35, speed: 0.6, r: 20 },
+    { type: "corona", name: "👑 冠狀病毒王", time: 120, hp: 80, dmg: 45, speed: 1.1, r: 40 }
+];
+
+// --- 3. 遊戲主狀態物件 ---
+const Game = {
+    canvas: null,
+    ctx: null,
+    isPaused: false,
+    gameTime: 0, // 秒
+    killCount: 0,
     
-    if (type === 'neutrophil') {
-        player.color = '#00adb5'; player.charName = '嗜中性球';
-    } else if (type === 'macrophage') {
-        player.color = '#ff9f43'; player.charName = '巨噬細胞';
-        player.maxHp = 150; player.hp = 150; player.radius = 23; player.speed = 2.9; player.magnetRange = 130;
-    } else if (type === 'killerT') {
-        player.color = '#ff2e63'; player.charName = '殺手 T 細胞';
-        player.speed = 4.1;
-    }
-
-    document.getElementById('charSelectScreen').style.display = 'none';
-    canvas.style.display = 'block';
-    document.getElementById('ui').style.display = 'flex';
-    document.querySelectorAll('.bar-container').forEach(el => el.style.display = 'block');
+    // 玩家狀態
+    player: {
+        x: 0, y: 0, r: 18, speed: 3.4, hp: 100, maxHp: 100,
+        xp: 0, xpNeeded: 100, level: 1, id: 'neutrophil', skills: []
+    },
     
-    resizeCanvas();
-    gameLoop();
-}
-
-// 觸控監聽
-window.addEventListener('touchstart', (e) => {
-    if (!gameStarted || isPaused) return;
-    const touch = e.touches[0];
-    if (Math.hypot(touch.clientX - joystick.startX, touch.clientY - joystick.startY) < 100) joystick.active = true;
-});
-window.addEventListener('touchmove', (e) => {
-    if (!joystick.active) return;
-    const touch = e.touches[0];
-    const dx = touch.clientX - joystick.startX, dy = touch.clientY - joystick.startY;
-    const dist = Math.hypot(dx, dy), angle = Math.atan2(dy, dx);
-    if (dist > joystick.maxRadius) {
-        joystick.curX = joystick.startX + Math.cos(angle) * joystick.maxRadius;
-        joystick.curY = joystick.startY + Math.sin(angle) * joystick.maxRadius;
-    } else { joystick.curX = touch.clientX; joystick.curY = touch.clientY; }
-    const moveDist = Math.min(dist, joystick.maxRadius);
-    joystick.vx = Math.cos(angle) * (moveDist / joystick.maxRadius);
-    joystick.vy = Math.sin(angle) * (moveDist / joystick.maxRadius);
-});
-window.addEventListener('touchend', () => {
-    joystick.active = false; joystick.curX = joystick.startX; joystick.curY = joystick.startY; joystick.vx = 0; joystick.vy = 0;
-});
-
-// === 2. 病毒敵人生成數據庫 (不同血量、速度與傷害) ===
-let lastSpawn = 0;
-function spawnLogic() {
-    if (isPaused || Date.now() - lastSpawn < 1200) return;
-    lastSpawn = Date.now();
-    if (enemies.length > 65) return;
-
-    const angle = Math.random() * Math.PI * 2;
-    const dist = Math.max(canvas.width, canvas.height) / 2 + 60;
-    const eX = player.x + Math.cos(angle) * dist;
-    const eY = player.y + Math.sin(angle) * dist;
-
-    // 預設雜魚：腺病毒
-    let type = 'adenovirus', r = 12, s = 1.3, hp = 1, dmg = 10, col = '#00ff66';
+    // 鏡頭狀態
+    camera: { x: 0, y: 0 },
     
-    // 隨時間解鎖高階病毒
-    if (elapsedTime > 20 && Math.random() < 0.4) { 
-        type = 'norovirus'; r = 10; s = 2.4; hp = 1; dmg = 15; col = '#ff3333'; // 諾羅 (高速衝鋒)
-    }
-    if (elapsedTime > 55 && Math.random() < 0.3) { 
-        type = 'bacteriophage'; r = 15; s = 0.9; hp = 3; dmg = 22; col = '#ff9f43'; // 噬菌體 (遠程彈幕)
-    }
-    if (elapsedTime > 90 && Math.random() < 0.2) { 
-        type = 'amoeba'; r = 22; s = 0.6; hp = 7; dmg = 35; col = '#aa96da'; // 變形蟲 (厚血分裂)
-    }
-    if (elapsedTime >= 120 && !enemies.some(e => e.type === 'boss')) { 
-        type = 'boss'; r = 42; s = 1.1; hp = 80; dmg = 45; col = '#ffff00'; // 冠狀病毒王
-    }
-
-    enemies.push({ x: eX, y: eY, radius: r, speed: s, color: col, hp, maxHp: hp, damage: dmg, type, lastShot: 0, freezeTime: 0 });
-}
-
-// === 3. 各角色專屬初始武器發射邏輯 ===
-function fireWeapon(closestEnemy, baseAngle) {
-    if (player.type === 'neutrophil') {
-        // 活性氧彈：單體高頻
-        for (let i = 0; i < player.bulletCount; i++) {
-            const a = baseAngle + (i - (player.bulletCount - 1) / 2) * 0.15;
-            bullets.push({ x: player.x, y: player.y, vx: Math.cos(a) * 9, vy: Math.sin(a) * 9, radius: 5, dmg: 1, type: 'normal' });
-        }
-    } 
-    else if (player.type === 'macrophage') {
-        // 偽足掃擊：圍繞周圍的多向大範圍打擊
-        const count = 3 + player.bulletCount;
-        for (let i = 0; i < count; i++) {
-            const a = (Math.PI * 2 / count) * i;
-            bullets.push({ x: player.x, y: player.y, vx: Math.cos(a) * 4.5, vy: Math.sin(a) * 4.5, radius: 9, dmg: 1.5, type: 'sweep' });
-        }
-    } 
-    else if (player.type === 'killerT') {
-        // 穿孔素穿刺：直線高速貫穿雷射
-        isLaserFiring = true; laserAngle = baseAngle; laserTimer = 0;
-    }
-}
-
-function showUpgradeMenu() {
-    isPaused = true;
-    document.getElementById('upgradeMenu').style.display = 'block';
-    const optionsDiv = document.getElementById('options');
-    optionsDiv.innerHTML = '';
+    // 虛擬搖桿狀態
+    joystick: {
+        baseX: 0, baseY: 0, stickX: 0, stickY: 0,
+        maxRadius: 50, isDragging: false, vx: 0, vy: 0
+    },
     
-    const skills = [
-        { name: '⚔️ 細胞分裂 (武器效能+1)', act: () => player.bulletCount++ },
-        { name: '🔥 細胞核爆 (360度大範圍清場)', act: () => player.novaLevel++ },
-        { name: '🛡️ 細胞壁護盾 (旋轉防禦球)', act: () => player.shieldLevel++ },
-        { name: '🧪 毒性化學路徑 (身後留下酸液)', act: () => player.acidLevel++ },
-        { name: '❄️  cytokine 凍結波 (大範圍減速)', act: () => player.freezeLevel++ },
-        { name: '🧲 趨化因子引力 (拾取範圍增加)', act: () => player.magnetLevel++ },
-        { name: '🩹 細胞再生 (立刻恢復 40% 血量)', act: () => player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.4) }
-    ];
-
-    skills.sort(() => 0.5 - Math.random()).slice(0, 3).forEach(s => {
-        const b = document.createElement('button'); b.className = 'btn'; b.innerText = s.name;
-        b.onclick = () => { s.act(); isPaused = false; document.getElementById('upgradeMenu').style.display = 'none'; };
-        optionsDiv.appendChild(b);
-    });
-}
-
-function update() {
-    if (isPaused) return;
-
-    elapsedTime = Math.floor((Date.now() - startTime) / 1000);
-    document.getElementById('gameTime').innerText = `${Math.floor(elapsedTime/60).toString().padStart(2,'0')}:${(elapsedTime%60).toString().padStart(2,'0')}`;
-
-    // 移動與鏡頭
-    player.x += joystick.vx * player.speed; player.y += joystick.vy * player.speed;
-    camera.x = player.x - canvas.width / 2; camera.y = player.y - canvas.height / 2;
-
-    // UI 更新
-    document.getElementById('level').innerText = player.level;
-    document.getElementById('charName').innerText = player.charName;
-    document.getElementById('kills').innerText = kills;
-    document.getElementById('xpBar').style.width = (player.xp / player.xpNeeded * 100) + '%';
-    document.getElementById('hpBar').style.width = Math.max(0, (player.hp / player.maxHp * 100)) + '%';
-
-    // 死亡判定
-    if (player.hp <= 0) gameOver();
-
-    // 技能：酸液路徑
-    if (player.acidLevel > 0 && Date.now() - acidTimer > 350) {
-        acids.push({ x: player.x, y: player.y, radius: 18 + player.acidLevel * 4, life: 2500 });
-        acidTimer = Date.now();
-    }
-    for (let i = acids.length - 1; i >= 0; i--) { acids[i].life -= 16; if (acids[i].life <= 0) acids.splice(i, 1); }
-
-    // 技能：凍結波
-    if (player.freezeLevel > 0) {
-        freezeTimer++;
-        if (freezeTimer > 150) {
-            enemies.forEach(e => { if (Math.hypot(e.x - player.x, e.y - player.y) < 220 + player.freezeLevel * 20) e.freezeTime = 90; });
-            freezeTimer = 0;
-        }
-    }
-
-    // 自動主武器冷卻檢查
-    let shotCooldown = player.type === 'killerT' ? 700 : 420; // T細胞雷射冷卻較長
-    if (Date.now() - player.lastShot > shotCooldown && enemies.length > 0) {
-        let closest = null, minDist = Infinity;
-        enemies.forEach(e => { const d = Math.hypot(e.x - player.x, e.y - player.y); if (d < minDist) { minDist = d; closest = e; } });
-        if (closest) {
-            fireWeapon(closest, Math.atan2(closest.y - player.y, closest.x - player.x));
-            player.lastShot = Date.now();
-        }
-    }
-
-    // 技能：細胞核爆副武器
-    if (player.novaLevel > 0 && Date.now() - player.lastNova > 4500) {
-        const n = 10 + player.novaLevel * 2;
-        for (let i = 0; i < n; i++) {
-            const a = (Math.PI * 2 / n) * i;
-            bullets.push({ x: player.x, y: player.y, vx: Math.cos(a) * 6, vy: Math.sin(a) * 6, radius: 6, dmg: 1.2, type: 'nova' });
-        }
-        player.lastNova = Date.now();
-    }
-
-    // 殺手 T 細胞雷射穿刺傷害判定
-    if (player.type === 'killerT' && isLaserFiring && laserTimer < 20) {
-        laserTimer++;
-        enemies.forEach((e, idx) => {
-            const lx = Math.cos(laserAngle), ly = Math.sin(laserAngle);
-            const dot = (e.x - player.x) * lx + (e.y - player.y) * ly;
-            if (dot > 0) {
-                const px = player.x + lx * dot, py = player.y + ly * dot;
-                if (Math.hypot(e.x - px, e.y - py) < e.radius + 15) {
-                    let d = 0.12; // 每幀持續傷害
-                    if (e.hp / e.maxHp < 0.3) d *= 2; // T細胞天賦：殘血雙倍傷害
-                    e.hp -= d; if (e.hp <= 0) handleKill(e, idx);
-                }
-            }
-        });
-    } else if (laserTimer >= 20) { isLaserFiring = false; }
-
-    // 病毒敵人與碰撞處理
-    spawnLogic();
-    shieldAngle += 0.04;
+    // 遊戲內實體陣列
+    enemies: [],
+    bullets: [],
+    crystals: [], // 經驗值晶體
     
-    enemies.forEach((e, idx) => {
-        const dist = Math.hypot(player.x - e.x, player.y - e.y);
-        const angle = Math.atan2(player.y - e.y, player.x - e.x);
-
-        if (e.freezeTime > 0) { e.freezeTime--; } 
-        else {
-            if (e.type === 'ranged' && dist < 220) {
-                if (Date.now() - e.lastShot > 2200) {
-                    enemyBullets.push({ x: e.x, y: e.y, vx: Math.cos(angle) * 4.5, vy: Math.sin(angle) * 4.5, radius: 5, damage: e.damage });
-                    e.lastShot = Date.now();
-                }
-            } else if (e.type === 'boss' && Date.now() - e.lastShot > 4000) {
-                e.x += Math.cos(angle) * 35; e.y += Math.sin(angle) * 35; // 衝鋒
-                for(let i=0; i<6; i++) enemyBullets.push({ x: e.x, y: e.y, vx: Math.cos((Math.PI*2/6)*i)*3, vy: Math.sin((Math.PI*2/6)*i)*3, radius: 5, damage: 15 });
-                e.lastShot = Date.now();
-            } else {
-                e.x += Math.cos(angle) * e.speed; e.y += Math.sin(angle) * e.speed;
-            }
-        }
-
-        // 酸液腐蝕
-        acids.forEach(a => { if (Math.hypot(e.x - a.x, e.y - a.y) < e.radius + a.radius) { e.hp -= 0.025; if (e.hp <= 0) handleKill(e, idx); } });
-
-        // 護盾碰撞
-        if (player.shieldLevel > 0) {
-            for (let i = 0; i < player.shieldLevel; i++) {
-                const sa = shieldAngle + (Math.PI * 2 / player.shieldLevel) * i;
-                if (Math.hypot(e.x - (player.x + Math.cos(sa) * 60), e.y - (player.y + Math.sin(sa) * 60)) < e.radius + 8) {
-                    e.hp -= 0.08; if (e.hp <= 0) handleKill(e, idx);
-                }
-            }
-        }
-
-        // 病毒直接撞擊細胞 (扣血)
-        if (dist < player.radius + e.radius) {
-            player.hp -= 0.5; // 每幀持續接觸扣血
-        }
-    });
-
-    // 處理遠程敵方子彈
-    for (let i = enemyBullets.length - 1; i >= 0; i--) {
-        const eb = enemyBullets[i]; eb.x += eb.vx; eb.y += eb.vy;
-        if (Math.hypot(player.x - eb.x, player.y - eb.y) > 900) { enemyBullets.splice(i, 1); continue; }
-        if (Math.hypot(player.x - eb.x, player.y - eb.y) < player.radius + eb.radius) {
-            player.hp -= eb.damage; // 擊中扣除對應病毒的攻擊力
-            enemyBullets.splice(i, 1);
-        }
-    }
-
-    // 處理玩家子彈
-    for (let i = bullets.length - 1; i >= 0; i--) {
-        const b = bullets[i]; b.x += b.vx; b.y += b.vy;
-        if (Math.hypot(player.x - b.x, player.y - b.y) > 900) { bullets.splice(i, 1); continue; }
+    // 初始化遊戲
+    init(canvasId) {
+        this.canvas = document.getElementById(canvasId);
+        this.ctx = this.canvas.getContext("2d");
+        this.resizeCanvas();
+        window.addEventListener('resize', () => this.resizeCanvas());
         
-        for (let j = enemies.length - 1; j >= 0; j--) {
-            const e = enemies[j];
-            if (Math.hypot(b.x - e.x, b.y - e.y) < e.radius + b.radius) {
-                let finalDmg = b.dmg;
-                if (player.type === 'killerT' && (e.hp / e.maxHp < 0.3)) finalDmg *= 2; // T細胞殘血斬殺
-                e.hp -= finalDmg;
-                bullets.splice(i, 1);
-                if (e.hp <= 0) handleKill(e, j);
-                break;
+        // 綁定控制事件
+        this.bindJoystickEvents();
+        
+        // 預載入圖片
+        this.preload(() => {
+            console.log("遊戲資源載入完成，等待 selectCharacter() 觸發。");
+        });
+    },
+    
+    resizeCanvas() {
+        this.canvas.width = window.innerWidth;
+        this.canvas.height = window.innerHeight;
+        // 初始化搖桿位置到右下角
+        this.joystick.baseX = this.canvas.width - 100;
+        this.joystick.baseY = this.canvas.height - 100;
+        this.joystick.stickX = this.joystick.baseX;
+        this.joystick.stickY = this.joystick.baseY;
+    },
+    
+    preload(callback) {
+        let loaded = 0;
+        const total = Object.keys(ASSET_PATHS).length;
+        for (let key in ASSET_PATHS) {
+            IMAGES[key] = new Image();
+            IMAGES[key].src = ASSET_PATHS[key];
+            IMAGES[key].onload = () => {
+                loaded++;
+                if (loaded === total) callback();
+            };
+        }
+    }
+};
+
+// --- 4. 角色選擇與生命週期流程 ---
+function selectCharacter(charId) {
+    const data = CHARACTER_DB[charId];
+    if (!data) return;
+    
+    // 初始化玩家資料
+    Game.player = {
+        x: 0, y: 0,
+        id: charId,
+        name: data.name,
+        r: data.r,
+        speed: data.speed,
+        hp: data.maxHp,
+        maxHp: data.maxHp,
+        xp: 0,
+        xpNeeded: 100,
+        level: 1,
+        skills: [data.weapon] // 初始解鎖主武器
+    };
+    
+    Game.isPaused = false;
+    Game.gameTime = 0;
+    Game.killCount = 0;
+    Game.enemies = [];
+    Game.bullets = [];
+    Game.crystals = [];
+    
+    // 啟動計時器 (每秒+1秒)
+    if (Game.timeInterval) clearInterval(Game.timeInterval);
+    Game.timeInterval = setInterval(() => {
+        if (!Game.isPaused) Game.gameTime++;
+    }, 1000);
+    
+    // 開啟 gameLoop
+    requestAnimationFrame(gameLoop);
+}
+
+// --- 5. 虛擬搖桿運算邏輯 ---
+Game.bindJoystickEvents = function() {
+    const handleStart = (ex, ey) => {
+        // 如果點擊範圍在右下角搖桿區域
+        const dist = Math.hypot(ex - this.joystick.baseX, ey - this.joystick.baseY);
+        if (dist < this.joystick.maxRadius * 2) {
+            this.joystick.isDragging = true;
+            handleMove(ex, ey);
+        }
+    };
+    
+    const handleMove = (ex, ey) => {
+        if (!this.joystick.isDragging) return;
+        const dx = ex - this.joystick.baseX;
+        const dy = ey - this.joystick.baseY;
+        const dist = Math.hypot(dx, dy);
+        const angle = Math.atan2(dy, dx);
+        
+        // 規格書：當 Dist > 最大半徑時，搖桿頭固定於最大半徑邊緣
+        if (dist > this.joystick.maxRadius) {
+            this.joystick.stickX = this.joystick.baseX + Math.cos(angle) * this.joystick.maxRadius;
+            this.joystick.stickY = this.joystick.baseY + Math.sin(angle) * this.joystick.maxRadius;
+        } else {
+            this.joystick.stickX = ex;
+            this.joystick.stickY = ey;
+        }
+        
+        // 規格書：輸出歸一化的速度向量 [-1, 1]
+        this.joystick.vx = Math.cos(angle) * Math.min(1, dist / this.joystick.maxRadius);
+        this.joystick.vy = Math.sin(angle) * Math.min(1, dist / this.joystick.maxRadius);
+    };
+    
+    const handleEnd = () => {
+        this.joystick.isDragging = false;
+        this.joystick.stickX = this.joystick.baseX;
+        this.joystick.stickY = this.joystick.baseY;
+        this.joystick.vx = 0;
+        this.joystick.vy = 0;
+    };
+    
+    // 監聽觸控與滑鼠
+    window.addEventListener('mousedown', e => handleStart(e.clientX, e.clientY));
+    window.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+    window.addEventListener('mouseup', () => handleEnd());
+    
+    window.addEventListener('touchstart', e => {
+        const t = e.touches[0];
+        handleStart(t.clientX, t.clientY);
+    });
+    window.addEventListener('touchmove', e => {
+        const t = e.touches[0];
+        handleMove(t.clientX, t.clientY);
+    });
+    window.addEventListener('touchend', () => handleEnd());
+};
+
+// --- 6. 核心更新邏輯 (Update) ---
+function update() {
+    if (Game.isPaused) return;
+    
+    const p = Game.player;
+    
+    // 1. 玩家位移
+    p.x += Game.joystick.vx * p.speed;
+    p.y += Game.joystick.vy * p.speed;
+    
+    // 2. 鏡頭平滑跟隨玩家（玩家保持在螢幕幾何中心）
+    Game.camera.x = p.x;
+    Game.camera.y = p.y;
+    
+    // 3. 病毒 AI 更新（追擊玩家）
+    Game.enemies.forEach(enemy => {
+        const dx = p.x - enemy.x;
+        const dy = p.y - enemy.y;
+        const dist = Math.hypot(dx, dy);
+        
+        // 基礎移動 AI
+        if (dist > 0) {
+            enemy.x += (dx / dist) * enemy.speed;
+            enemy.y += (dy / dist) * enemy.speed;
+        }
+        
+        // 碰撞檢查：傷害玩家
+        if (dist < p.r + enemy.r) {
+            p.hp -= enemy.dmg / 60; // 假設 60 FPS 持續扣血
+            if (p.hp <= 0) gameOver();
+        }
+    });
+    
+    // 4. 經驗值晶體磁鐵吸引
+    Game.crystals.forEach((cry, idx) => {
+        const dx = p.x - cry.x;
+        const dy = p.y - cry.y;
+        const dist = Math.hypot(dx, dy);
+        
+        // 巨噬細胞基礎吸收範圍增加 60%
+        const magnetRadius = (p.id === 'macrophage') ? 160 : 100;
+        
+        if (dist < magnetRadius) {
+            cry.x += (dx / dist) * 5;
+            cry.y += (dy / dist) * 5;
+        }
+        
+        // 吃到經驗球
+        if (dist < p.r + 5) {
+            let gainXp = 10;
+            // 嗜中性球 15% 機率雙倍經驗
+            if (p.id === 'neutrophil' && Math.random() < 0.15) gainXp *= 2;
+            
+            p.xp += gainXp;
+            Game.crystals.splice(idx, 1);
+            
+            // 升級檢測
+            if (p.xp >= p.xpNeeded) {
+                triggerUpgrade();
             }
         }
-    }
-
-    // 處理經驗值晶體吸取
-    const actualMagnet = player.magnetRange + player.magnetLevel * 50;
-    for (let i = xps.length - 1; i >= 0; i--) {
-        const xp = xps[i]; const d = Math.hypot(player.x - xp.x, player.y - xp.y);
-        if (d < actualMagnet) {
-            const a = Math.atan2(player.y - xp.y, player.x - xp.x);
-            xp.x += Math.cos(a) * 7.5; xp.y += Math.sin(a) * 7.5;
-        }
-        if (d < player.radius + xp.radius) {
-            player.xp += xp.value; xps.splice(i, 1);
-            if (player.xp >= player.xpNeeded) { player.xp -= player.xpNeeded; player.xpNeeded *= 1.35; player.level++; showUpgradeMenu(); }
-        }
+    });
+    
+    // 生怪邏輯模擬 (依據生存時間解鎖新怪物)
+    if (Math.random() < 0.02) { // 隨機頻率生成
+        spawnEnemy();
     }
 }
 
-function handleKill(e, idx) {
-    let xpValue = 35;
-    // 嗜中性球天賦：吞噬，直接多加經驗值
-    if (player.type === 'neutrophil' && Math.random() < 0.15) xpValue *= 2;
-
-    if (e.type === 'amoeba') {
-        for (let i = 0; i < 3; i++) enemies.push({ x: e.x + (Math.random()-0.5)*20, y: e.y + (Math.random()-0.5)*20, radius: 10, speed: 1.6, color: '#bda5f5', hp: 1, maxHp: 1, damage: 8, type: 'mini', lastShot: 0, freezeTime: 0 });
-    }
-    xps.push({ x: e.x, y: e.y, radius: 4, color: e.type === 'boss' ? '#ffff00' : '#00ff66', value: xpValue });
-    enemies.splice(idx, 1); kills++;
-}
-
-function gameOver() { alert(`防線全面失守！你以 ${player.charName} 撐過了 ${elapsedTime} 秒，消滅了 ${kills} 個病毒。`); location.reload(); }
-
-function draw() {
+// --- 7. 核心渲染邏輯 (Render) ---
+function render() {
+    const ctx = Game.ctx;
+    const canvas = Game.canvas;
+    const p = Game.player;
+    const cam = Game.camera;
+    
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // 無限地圖網格
-    ctx.strokeStyle = '#141420'; ctx.lineWidth = 1;
-    const ox = -camera.x % 60, oy = -camera.y % 60;
-    for (let x = ox; x < canvas.width; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
-    for (let y = oy; y < canvas.height; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
-
-    // 繪製路徑酸液
-    acids.forEach(a => { ctx.beginPath(); ctx.arc(a.x - camera.x, a.y - camera.y, a.radius, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0, 255, 100, 0.15)'; ctx.fill(); });
-    // 繪製 XP 晶體
-    xps.forEach(xp => { ctx.beginPath(); ctx.arc(xp.x - camera.x, xp.y - camera.y, xp.radius, 0, Math.PI * 2); ctx.fillStyle = xp.color; ctx.fill(); });
-    // 繪製敵方子彈
-    enemyBullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x - camera.x, b.y - camera.y, b.radius, 0, Math.PI * 2); ctx.fillStyle = '#ff3333'; ctx.fill(); });
-
-    // 繪製殺手 T 細胞固有貫穿光束
-    if (player.type === 'killerT' && isLaserFiring) {
-        ctx.save(); ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 46, 99, 0.7)'; ctx.lineWidth = 15; ctx.lineCap = 'round';
-        ctx.moveTo(player.x - camera.x, player.y - camera.y);
-        ctx.lineTo((player.x + Math.cos(laserAngle) * 1200) - camera.x, (player.y + Math.sin(laserAngle) * 1200) - camera.y);
-        ctx.stroke(); ctx.restore();
+    // 1. 繪製無限網格背景 (規格書：用數學取模運算 camera.x % 60)
+    ctx.save();
+    ctx.strokeStyle = "#1a2636";
+    ctx.lineWidth = 1;
+    const offsetX = -(cam.x % 60);
+    const offsetY = -(cam.y % 60);
+    
+    for (let x = offsetX; x < canvas.width; x += 60) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
     }
-
-    // 繪製玩家子彈
-    bullets.forEach(b => {
-        ctx.beginPath(); ctx.arc(b.x - camera.x, b.y - camera.y, b.radius, 0, Math.PI * 2);
-        ctx.fillStyle = b.type === 'sweep' ? '#ff9f43' : '#ffff00'; ctx.fill();
+    for (let y = offsetY; y < canvas.height; y += 60) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+    }
+    ctx.restore();
+    
+    // 計算螢幕中心點
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+    
+    // 2. 繪製經驗值晶體
+    Game.crystals.forEach(cry => {
+        const rx = cry.x - cam.x + cx;
+        const ry = cry.y - cam.y + cy;
+        ctx.fillStyle = "#00ffcc";
+        ctx.fillRect(rx - 3, ry - 3, 6, 6);
     });
-
-    // 繪製護盾
-    if (player.shieldLevel > 0) {
-        for (let i = 0; i < player.shieldLevel; i++) {
-            const sa = shieldAngle + (Math.PI * 2 / player.shieldLevel) * i;
-            ctx.beginPath(); ctx.arc((player.x + Math.cos(sa) * 60) - camera.x, (player.y + Math.sin(sa) * 60) - camera.y, 8, 0, Math.PI * 2); ctx.fillStyle = '#00f5ff'; ctx.fill();
-        }
-    }
-
-    // 繪製病毒敵人
-    enemies.forEach(e => {
-        ctx.beginPath(); ctx.arc(e.x - camera.x, e.y - camera.y, e.radius, 0, Math.PI * 2); ctx.fillStyle = e.color; 
-        if (e.freezeTime > 0) { ctx.strokeStyle = '#00f5ff'; ctx.lineWidth = 3; ctx.stroke(); }
-        ctx.fill();
-        // 簡單血條顯示 (只顯示受傷的怪)
-        if (e.hp < e.maxHp) {
-            ctx.fillStyle = '#ff2e63'; ctx.fillRect(e.x - camera.x - 15, e.y - camera.y - e.radius - 8, 30, 4);
-            ctx.fillStyle = '#00ff66'; ctx.fillRect(e.x - camera.x - 15, e.y - camera.y - e.radius - 8, 30 * (e.hp / e.maxHp), 4);
+    
+    // 3. 繪製敵人 (規格書公式：物件座標 - Camera座標 + 螢幕中心偏移)
+    Game.enemies.forEach(enemy => {
+        const rx = enemy.x - cam.x + cx;
+        const ry = enemy.y - cam.y + cy;
+        const size = enemy.r * 2;
+        
+        const img = IMAGES[enemy.type];
+        if (img) {
+            ctx.drawImage(img, rx - enemy.r, ry - enemy.r, size, size);
+        } else {
+            // 後備幾何圖形 (防止圖片載入失敗)
+            ctx.beginPath(); ctx.arc(rx, ry, enemy.r, 0, Math.PI*2);
+            ctx.fillStyle = "red"; ctx.fill();
         }
     });
-
-    // 繪製免疫細胞玩家
-    ctx.beginPath(); ctx.arc(player.x - camera.x, player.y - camera.y, player.radius, 0, Math.PI * 2);
-    ctx.fillStyle = player.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
-
-    // 繪製右下角搖桿
-    if (joystick.active) {
-        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
-        ctx.beginPath(); ctx.arc(joystick.curX, joystick.curY, 20, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0, 173, 181, 0.5)'; ctx.fill();
+    
+    // 4. 繪製玩家角色 (永遠在螢幕正中央)
+    const pSize = p.r * 2;
+    const pImg = IMAGES[p.id];
+    if (pImg) {
+        ctx.drawImage(pImg, cx - p.r, cy - p.r, pSize, pSize);
     } else {
-        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.stroke();
+        ctx.beginPath(); ctx.arc(cx, cy, p.r, 0, Math.PI*2);
+        ctx.fillStyle = "blue"; ctx.fill();
     }
+    
+    // 5. 繪製虛擬搖桿 UI
+    if (Game.joystick.isDragging || true) {
+        // 搖桿底座
+        ctx.beginPath(); ctx.arc(Game.joystick.baseX, Game.joystick.baseY, Game.joystick.maxRadius, 0, Math.PI*2);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.1)"; ctx.fill();
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.3)"; ctx.stroke();
+        // 搖桿頭
+        ctx.beginPath(); ctx.arc(Game.joystick.stickX, Game.joystick.stickY, 20, 0, Math.PI*2);
+        ctx.fillStyle = "rgba(255, 255, 255, 0.5)"; ctx.fill();
+    }
+    
+    // 6. 繪製頂部 UI (時間、血條、經驗條)
+    drawUI(ctx, canvas, p);
 }
 
-function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
-</script>
-</body>
-</html>
+// --- 8. 輔助機制 (生怪、升級、結束) ---
+function spawnEnemy() {
+    // 根據當前遊戲時間篩選可生成的病毒
+    const available = ENEMY_DB.filter(e => Game.gameTime >= e.time);
+    if (available.length === 0) return;
+    const template = available[Math.floor(Math.random() * available.length)];
+    
+    // 在螢幕外隨機半徑生成
+    const angle = Math.random() * Math.PI * 2;
+    const spawnDist = Math.max(window.innerWidth, window.innerHeight) / 2 + 50;
+    
+    Game.enemies.push({
+        ...template,
+        x: Game.player.x + Math.cos(angle) * spawnDist,
+        y: Game.player.y + Math.sin(angle) * spawnDist,
+        hp: template.hp
+    });
+}
+
+function drawUI(ctx, canvas, p) {
+    // 時間顯示
+    ctx.fillStyle = "#fff";
+    ctx.font = "20px Arial";
+    ctx.textAlign = "center";
+    const min = String(Math.floor(Game.gameTime / 60)).padStart(2, '0');
+    const sec = String(Game.gameTime % 60).padStart(2, '0');
+    ctx.fillText(`${min}:${sec}`, canvas.width / 2, 40);
+    
+    // 擊殺數
+    ctx.textAlign = "left";
+    ctx.fillText(`🧬 擊殺: ${Game.killCount}`, 20, 40);
+    
+    // 生命值條
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(20, 60, 200, 15);
+    ctx.fillStyle = "#ff3333";
+    ctx.fillRect(20, 60, (Math.max(0, p.hp) / p.maxHp) * 200, 15);
+    
+    // 經驗值條
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(20, 85, 200, 8);
+    ctx.fillStyle = "#00ffcc";
+    ctx.fillRect(20, 85, (p.xp / p.xpNeeded) * 200, 8);
+}
+
+function triggerUpgrade() {
+    Game.isPaused = true;
+    Game.player.xp = 0;
+    Game.player.level++;
+    Game.player.xpNeeded = Math.floor(Game.player.xpNeeded * 1.3);
+    
+    // 規格書：彈出隨機三選一突變選單
+    console.log("=== 🧬 細胞發生突變！請選擇升級 ===");
+    // 在實際網頁中，此處應顯示 HTML 彈出視窗，點擊後重設 Game.isPaused = false
+    setTimeout(() => { Game.isPaused = false; }, 1000); // 模擬選擇後繼續
+}
+
+function gameOver() {
+    Game.isPaused = true;
+    clearInterval(Game.timeInterval);
+    alert(`【遊戲結束】\n生存時間：${Game.gameTime} 秒\n擊殺數：${Game.killCount}`);
+    location.reload(); // 規格書：網頁自動刷新重置
+}
+
+// 主循環
+function gameLoop() {
+    update();
+    render();
+    requestAnimationFrame(gameLoop);
+}
