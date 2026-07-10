@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <title>免疫防線：細胞大戰病毒 </title>
+    <title>免疫防線：細胞大戰病毒 (路徑修正版)</title>
     <style>
         body {
             margin: 0; background-color: #08080c; color: white;
@@ -101,22 +101,22 @@ let startTime, elapsedTime = 0, isPaused = false, kills = 0, gameStarted = false
 let bullets = [], enemyBullets = [], enemies = [], xps = [], acids = [];
 let laserTimer = 0, isLaserFiring = false, laserAngle = 0, shieldAngle = 0, freezeTimer = 0, acidTimer = 0;
 
-// === 圖片資產預載管理 ===
+// === 圖片資產預載管理 (已修正為 ../assets/cell/) ===
 const assets = {
     neutrophil: new Image(), macrophage: new Image(), killerT: new Image(),
     adenovirus: new Image(), norovirus: new Image(), bacteriophage: new Image(),
     amoeba: new Image(), mini: new Image(), boss: new Image()
 };
 
-assets.neutrophil.src = 'asset/cell/cell_neutrophil.png';
-assets.macrophage.src = 'asset/cell/cell_macrophage.png';
-assets.killerT.src = 'asset/cell/cell_killer_t.png';
-assets.adenovirus.src = 'asset/cell/virus_adeno.png';
-assets.norovirus.src = 'asset/cell/virus_noro.png';
-assets.bacteriophage.src = 'asset/cell/virus_phage.png';
-assets.amoeba.src = 'asset/cell/microbe_amoeba.png';
-assets.mini.src = 'asset/cell/microbe_amoeba.png';
-assets.boss.src = 'asset/cell/virus_corona.png';
+assets.neutrophil.src = '../assets/cell/cell_neutrophil.png';
+assets.macrophage.src = '../assets/cell/cell_macrophage.png';
+assets.killerT.src = '../assets/cell/cell_killer_t.png';
+assets.adenovirus.src = '../assets/cell/virus_adeno.png';
+assets.norovirus.src = '../assets/cell/virus_noro.png';
+assets.bacteriophage.src = '../assets/cell/virus_phage.png';
+assets.amoeba.src = '../assets/cell/microbe_amoeba.png';
+assets.mini.src = '../assets/cell/microbe_amoeba.png';
+assets.boss.src = '../assets/cell/virus_corona.png';
 
 // === 虛擬搖桿 ===
 const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 55, vx: 0, vy: 0 };
@@ -187,7 +187,7 @@ window.addEventListener('touchend', () => {
     joystick.active = false; joystick.curX = joystick.startX; joystick.curY = joystick.startY; joystick.vx = 0; joystick.vy = 0;
 });
 
-// === 病毒敵人生成數據庫（已調整體型大小） ===
+// === 病毒敵人生成邏輯 ===
 let lastSpawn = 0;
 function spawnLogic() {
     if (isPaused || Date.now() - lastSpawn < 1200) return;
@@ -199,22 +199,22 @@ function spawnLogic() {
     const eX = player.x + Math.cos(angle) * dist;
     const eY = player.y + Math.sin(angle) * dist;
 
-    // 【修改】腺病毒：半徑由 14 放大至 24
+    // 腺病毒：半徑由 14 放大至 24
     let type = 'adenovirus', r = 24, s = 1.3, hp = 1, dmg = 10, col = '#00ff66';
     
     if (elapsedTime > 20 && Math.random() < 0.4) { 
-        // 【修改】諾羅病毒：半徑由 12 放大至 22
+        // 諾羅病毒：半徑由 12 放大至 22
         type = 'norovirus'; r = 22; s = 2.4; hp = 1; dmg = 15; col = '#ff3333'; 
     }
     if (elapsedTime > 55 && Math.random() < 0.3) { 
-        // 【修改】噬菌體：半徑由 18 放大至 28
+        // 噬菌體：半徑由 18 放大至 28
         type = 'bacteriophage'; r = 28; s = 0.9; hp = 3; dmg = 22; col = '#ff9f43'; 
     }
     if (elapsedTime > 90 && Math.random() < 0.2) { 
-        type = 'amoeba'; r = 24; s = 0.6; hp = 7; dmg = 35; col = '#aa96da'; // 變形蟲
+        type = 'amoeba'; r = 24; s = 0.6; hp = 7; dmg = 35; col = '#aa96da'; 
     }
     if (elapsedTime >= 120 && !enemies.some(e => e.type === 'boss')) { 
-        type = 'boss'; r = 50; s = 1.1; hp = 80; dmg = 45; col = '#ffff00'; // 冠狀病毒王
+        type = 'boss'; r = 50; s = 1.1; hp = 80; dmg = 45; col = '#ffff00'; 
     }
 
     enemies.push({ x: eX, y: eY, radius: r, speed: s, color: col, hp, maxHp: hp, damage: dmg, type, lastShot: 0, freezeTime: 0 });
@@ -240,7 +240,7 @@ function fireWeapon(closestEnemy, baseAngle) {
     }
 }
 
-// 突變選單系統 (自訂標題)
+// 突變選單系統
 function showUpgradeMenu(isBossReward = false) {
     isPaused = true;
     document.getElementById('upgradeMenu').style.display = 'block';
@@ -413,7 +413,6 @@ function update() {
     }
 }
 
-// 處理擊殺
 function handleKill(e, idx) {
     let xpValue = 35;
     if (player.type === 'neutrophil' && Math.random() < 0.15) xpValue *= 2;
@@ -424,7 +423,7 @@ function handleKill(e, idx) {
     xps.push({ x: e.x, y: e.y, radius: 4, color: e.type === 'boss' ? '#ffff00' : '#00ff66', value: xpValue });
     enemies.splice(idx, 1); kills++;
 
-    // 【關鍵修改】如果打敗的是冠狀病毒王 (Boss)，立刻觸發選擇技能
+    // 擊敗魔王觸發特殊選擇技能
     if (e.type === 'boss') {
         showUpgradeMenu(true);
     }
