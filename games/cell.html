@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <title>免疫防線：細胞大戰病毒 (圖片視覺版)</title>
+    <title>免疫防線：細胞大戰病毒 </title>
     <style>
         body {
             margin: 0; background-color: #08080c; color: white;
@@ -89,7 +89,7 @@
 <canvas id="gameCanvas"></canvas>
 
 <div id="upgradeMenu">
-    <h3 style="color: #00adb5; margin-top: 0;">🧬 免疫基因突變</h3>
+    <h3 style="color: #00adb5; margin-top: 0;" id="upgradeTitle">🧬 免疫基因突變</h3>
     <div id="options"></div>
 </div>
 
@@ -103,30 +103,22 @@ let laserTimer = 0, isLaserFiring = false, laserAngle = 0, shieldAngle = 0, free
 
 // === 圖片資產預載管理 ===
 const assets = {
-    // 玩家免疫細胞
-    neutrophil: new Image(),
-    macrophage: new Image(),
-    killerT: new Image(),
-    // 病毒敵人
-    adenovirus: new Image(),
-    norovirus: new Image(),
-    bacteriophage: new Image(),
-    amoeba: new Image(),
-    mini: new Image(),
-    boss: new Image()
+    neutrophil: new Image(), macrophage: new Image(), killerT: new Image(),
+    adenovirus: new Image(), norovirus: new Image(), bacteriophage: new Image(),
+    amoeba: new Image(), mini: new Image(), boss: new Image()
 };
 
-assets.neutrophil.src = '../assets/cell/cell_neutrophil.png';
-assets.macrophage.src = '../assets/cell/cell_macrophage.png';
-assets.killerT.src = '../assets/cell/cell_killer_t.png';
-assets.adenovirus.src = '../assets/cell/virus_adeno.png';
-assets.norovirus.src = '../assets/cell/virus_noro.png';
-assets.bacteriophage.src = '../assets/cell/virus_phage.png';
-assets.amoeba.src = '../assets/cell/microbe_amoeba.png';
-assets.mini.src = '../assets/cell/microbe_amoeba.png'; // 分裂出的小變形蟲共用同張圖
-assets.boss.src = '../assets/cell/virus_corona.png';
+assets.neutrophil.src = 'asset/cell/cell_neutrophil.png';
+assets.macrophage.src = 'asset/cell/cell_macrophage.png';
+assets.killerT.src = 'asset/cell/cell_killer_t.png';
+assets.adenovirus.src = 'asset/cell/virus_adeno.png';
+assets.norovirus.src = 'asset/cell/virus_noro.png';
+assets.bacteriophage.src = 'asset/cell/virus_phage.png';
+assets.amoeba.src = 'asset/cell/microbe_amoeba.png';
+assets.mini.src = 'asset/cell/microbe_amoeba.png';
+assets.boss.src = 'asset/cell/virus_corona.png';
 
-// === 虛擬搖桿 (固定在右下角) ===
+// === 虛擬搖桿 ===
 const joystick = { startX: 0, startY: 0, curX: 0, curY: 0, active: false, maxRadius: 55, vx: 0, vy: 0 };
 
 function resizeCanvas() {
@@ -195,7 +187,7 @@ window.addEventListener('touchend', () => {
     joystick.active = false; joystick.curX = joystick.startX; joystick.curY = joystick.startY; joystick.vx = 0; joystick.vy = 0;
 });
 
-// === 病毒敵人生成數據庫 ===
+// === 病毒敵人生成數據庫（已調整體型大小） ===
 let lastSpawn = 0;
 function spawnLogic() {
     if (isPaused || Date.now() - lastSpawn < 1200) return;
@@ -207,20 +199,22 @@ function spawnLogic() {
     const eX = player.x + Math.cos(angle) * dist;
     const eY = player.y + Math.sin(angle) * dist;
 
-    // 腺病毒
-    let type = 'adenovirus', r = 14, s = 1.3, hp = 1, dmg = 10, col = '#00ff66';
+    // 【修改】腺病毒：半徑由 14 放大至 24
+    let type = 'adenovirus', r = 24, s = 1.3, hp = 1, dmg = 10, col = '#00ff66';
     
     if (elapsedTime > 20 && Math.random() < 0.4) { 
-        type = 'norovirus'; r = 12; s = 2.4; hp = 1; dmg = 15; col = '#ff3333'; // 諾羅
+        // 【修改】諾羅病毒：半徑由 12 放大至 22
+        type = 'norovirus'; r = 22; s = 2.4; hp = 1; dmg = 15; col = '#ff3333'; 
     }
     if (elapsedTime > 55 && Math.random() < 0.3) { 
-        type = 'bacteriophage'; r = 18; s = 0.9; hp = 3; dmg = 22; col = '#ff9f43'; // 噬菌體
+        // 【修改】噬菌體：半徑由 18 放大至 28
+        type = 'bacteriophage'; r = 28; s = 0.9; hp = 3; dmg = 22; col = '#ff9f43'; 
     }
     if (elapsedTime > 90 && Math.random() < 0.2) { 
         type = 'amoeba'; r = 24; s = 0.6; hp = 7; dmg = 35; col = '#aa96da'; // 變形蟲
     }
     if (elapsedTime >= 120 && !enemies.some(e => e.type === 'boss')) { 
-        type = 'boss'; r = 45; s = 1.1; hp = 80; dmg = 45; col = '#ffff00'; // 冠狀病毒王
+        type = 'boss'; r = 50; s = 1.1; hp = 80; dmg = 45; col = '#ffff00'; // 冠狀病毒王
     }
 
     enemies.push({ x: eX, y: eY, radius: r, speed: s, color: col, hp, maxHp: hp, damage: dmg, type, lastShot: 0, freezeTime: 0 });
@@ -246,9 +240,18 @@ function fireWeapon(closestEnemy, baseAngle) {
     }
 }
 
-function showUpgradeMenu() {
+// 突變選單系統 (自訂標題)
+function showUpgradeMenu(isBossReward = false) {
     isPaused = true;
     document.getElementById('upgradeMenu').style.display = 'block';
+    
+    const titleEl = document.getElementById('upgradeTitle');
+    if (isBossReward) {
+        titleEl.innerHTML = `👑 擊敗冠狀病毒王！<br><span style="color:#ffff00; font-size:14px;">獲得核心抗體突變獎勵</span>`;
+    } else {
+        titleEl.innerText = `🧬 免疫基因突變`;
+    }
+
     const optionsDiv = document.getElementById('options');
     optionsDiv.innerHTML = '';
     
@@ -257,7 +260,7 @@ function showUpgradeMenu() {
         { name: '🔥 細胞核爆 (360度大範圍清場)', act: () => player.novaLevel++ },
         { name: '🛡️ 細胞壁護盾 (旋轉防禦球)', act: () => player.shieldLevel++ },
         { name: '🧪 毒性化學路徑 (身後留下酸液)', act: () => player.acidLevel++ },
-        { name: '❄️  cytokine 凍結波 (大範圍減速)', act: () => player.freezeLevel++ },
+        { name: '❄️ cytokine 凍結波 (大範圍減速)', act: () => player.freezeLevel++ },
         { name: '🧲 趨化因子引力 (拾取範圍增加)', act: () => player.magnetLevel++ },
         { name: '🩹 細胞再生 (立刻恢復 40% 血量)', act: () => player.hp = Math.min(player.maxHp, player.hp + player.maxHp * 0.4) }
     ];
@@ -275,11 +278,9 @@ function update() {
     elapsedTime = Math.floor((Date.now() - startTime) / 1000);
     document.getElementById('gameTime').innerText = `${Math.floor(elapsedTime/60).toString().padStart(2,'0')}:${(elapsedTime%60).toString().padStart(2,'0')}`;
 
-    // 移動與鏡頭
     player.x += joystick.vx * player.speed; player.y += joystick.vy * player.speed;
     camera.x = player.x - canvas.width / 2; camera.y = player.y - canvas.height / 2;
 
-    // UI 更新
     document.getElementById('level').innerText = player.level;
     document.getElementById('charName').innerText = player.charName;
     document.getElementById('kills').innerText = kills;
@@ -288,14 +289,12 @@ function update() {
 
     if (player.hp <= 0) gameOver();
 
-    // 技能：酸液路徑
     if (player.acidLevel > 0 && Date.now() - acidTimer > 350) {
         acids.push({ x: player.x, y: player.y, radius: 18 + player.acidLevel * 4, life: 2500 });
         acidTimer = Date.now();
     }
     for (let i = acids.length - 1; i >= 0; i--) { acids[i].life -= 16; if (acids[i].life <= 0) acids.splice(i, 1); }
 
-    // 技能：凍結波
     if (player.freezeLevel > 0) {
         freezeTimer++;
         if (freezeTimer > 150) {
@@ -304,7 +303,6 @@ function update() {
         }
     }
 
-    // 自動主武器冷卻
     let shotCooldown = player.type === 'killerT' ? 700 : 420;
     if (Date.now() - player.lastShot > shotCooldown && enemies.length > 0) {
         let closest = null, minDist = Infinity;
@@ -315,7 +313,6 @@ function update() {
         }
     }
 
-    // 技能：細胞核爆
     if (player.novaLevel > 0 && Date.now() - player.lastNova > 4500) {
         const n = 10 + player.novaLevel * 2;
         for (let i = 0; i < n; i++) {
@@ -325,7 +322,6 @@ function update() {
         player.lastNova = Date.now();
     }
 
-    // T細胞雷射判定
     if (player.type === 'killerT' && isLaserFiring && laserTimer < 20) {
         laserTimer++;
         enemies.forEach((e, idx) => {
@@ -335,14 +331,13 @@ function update() {
                 const px = player.x + lx * dot, py = player.y + ly * dot;
                 if (Math.hypot(e.x - px, e.y - py) < e.radius + 15) {
                     let d = 0.12;
-                    if (e.hp / e.maxHp < 0.3) d *= 2; // 殘血雙倍
+                    if (e.hp / e.maxHp < 0.3) d *= 2;
                     e.hp -= d; if (e.hp <= 0) handleKill(e, idx);
                 }
             }
         });
     } else if (laserTimer >= 20) { isLaserFiring = false; }
 
-    // 病毒與碰撞
     spawnLogic();
     shieldAngle += 0.04;
     
@@ -380,7 +375,6 @@ function update() {
         if (dist < player.radius + e.radius) { player.hp -= 0.5; }
     });
 
-    // 處理敵方子彈
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
         const eb = enemyBullets[i]; eb.x += eb.vx; eb.y += eb.vy;
         if (Math.hypot(player.x - eb.x, player.y - eb.y) > 900) { enemyBullets.splice(i, 1); continue; }
@@ -389,7 +383,6 @@ function update() {
         }
     }
 
-    // 處理玩家子彈
     for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i]; b.x += b.vx; b.y += b.vy;
         if (Math.hypot(player.x - b.x, player.y - b.y) > 900) { bullets.splice(i, 1); continue; }
@@ -406,7 +399,6 @@ function update() {
         }
     }
 
-    // 經驗值吸取
     const actualMagnet = player.magnetRange + player.magnetLevel * 50;
     for (let i = xps.length - 1; i >= 0; i--) {
         const xp = xps[i]; const d = Math.hypot(player.x - xp.x, player.y - xp.y);
@@ -416,11 +408,12 @@ function update() {
         }
         if (d < player.radius + xp.radius) {
             player.xp += xp.value; xps.splice(i, 1);
-            if (player.xp >= player.xpNeeded) { player.xp -= player.xpNeeded; player.xpNeeded *= 1.35; player.level++; showUpgradeMenu(); }
+            if (player.xp >= player.xpNeeded) { player.xp -= player.xpNeeded; player.xpNeeded *= 1.35; player.level++; showUpgradeMenu(false); }
         }
     }
 }
 
+// 處理擊殺
 function handleKill(e, idx) {
     let xpValue = 35;
     if (player.type === 'neutrophil' && Math.random() < 0.15) xpValue *= 2;
@@ -430,6 +423,11 @@ function handleKill(e, idx) {
     }
     xps.push({ x: e.x, y: e.y, radius: 4, color: e.type === 'boss' ? '#ffff00' : '#00ff66', value: xpValue });
     enemies.splice(idx, 1); kills++;
+
+    // 【關鍵修改】如果打敗的是冠狀病毒王 (Boss)，立刻觸發選擇技能
+    if (e.type === 'boss') {
+        showUpgradeMenu(true);
+    }
 }
 
 function gameOver() { alert(`防線全面失守！你以 ${player.charName} 撐過了 ${elapsedTime} 秒，消滅了 ${kills} 個病毒。`); location.reload(); }
@@ -443,12 +441,10 @@ function draw() {
     for (let x = ox; x < canvas.width; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
     for (let y = oy; y < canvas.height; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
 
-    // 特效與晶體
     acids.forEach(a => { ctx.beginPath(); ctx.arc(a.x - camera.x, a.y - camera.y, a.radius, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0, 255, 100, 0.15)'; ctx.fill(); });
     xps.forEach(xp => { ctx.beginPath(); ctx.arc(xp.x - camera.x, xp.y - camera.y, xp.radius, 0, Math.PI * 2); ctx.fillStyle = xp.color; ctx.fill(); });
     enemyBullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x - camera.x, b.y - camera.y, b.radius, 0, Math.PI * 2); ctx.fillStyle = '#ff3333'; ctx.fill(); });
 
-    // 殺手 T 細胞固有雷射
     if (player.type === 'killerT' && isLaserFiring) {
         ctx.save(); ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 46, 99, 0.7)'; ctx.lineWidth = 15; ctx.lineCap = 'round';
         ctx.moveTo(player.x - camera.x, player.y - camera.y);
@@ -456,13 +452,11 @@ function draw() {
         ctx.stroke(); ctx.restore();
     }
 
-    // 玩家常規子彈
     bullets.forEach(b => {
         ctx.beginPath(); ctx.arc(b.x - camera.x, b.y - camera.y, b.radius, 0, Math.PI * 2);
         ctx.fillStyle = b.type === 'sweep' ? '#ff9f43' : '#ffff00'; ctx.fill();
     });
 
-    // 護盾
     if (player.shieldLevel > 0) {
         for (let i = 0; i < player.shieldLevel; i++) {
             const sa = shieldAngle + (Math.PI * 2 / player.shieldLevel) * i;
@@ -470,27 +464,24 @@ function draw() {
         }
     }
 
-    // === 【關鍵修改】繪製病毒敵人（改用 Image） ===
+    // 繪製病毒敵人
     enemies.forEach(e => {
         const img = assets[e.type];
-        // 如果圖片存在且載入完成就畫圖，否則使用幾何圖形Fallback
         if (img && img.complete && img.width > 0) {
             ctx.drawImage(img, e.x - camera.x - e.radius, e.y - camera.y - e.radius, e.radius * 2, e.radius * 2);
         } else {
             ctx.beginPath(); ctx.arc(e.x - camera.x, e.y - camera.y, e.radius, 0, Math.PI * 2); ctx.fillStyle = e.color; ctx.fill();
         }
         
-        // 凍結邊框特效
         if (e.freezeTime > 0) { ctx.strokeStyle = '#00f5ff'; ctx.lineWidth = 3; ctx.stroke(); }
         
-        // 病毒小血條
         if (e.hp < e.maxHp) {
             ctx.fillStyle = '#ff2e63'; ctx.fillRect(e.x - camera.x - 15, e.y - camera.y - e.radius - 8, 30, 4);
             ctx.fillStyle = '#00ff66'; ctx.fillRect(e.x - camera.x - 15, e.y - camera.y - e.radius - 8, 30 * (e.hp / e.maxHp), 4);
         }
     });
 
-    // === 【關鍵修改】繪製玩家免疫細胞（改用 Image） ===
+    // 繪製玩家免疫細胞
     const pImg = assets[player.type];
     if (pImg && pImg.complete && pImg.width > 0) {
         ctx.drawImage(pImg, player.x - camera.x - player.radius, player.y - camera.y - player.radius, player.radius * 2, player.radius * 2);
@@ -499,7 +490,6 @@ function draw() {
         ctx.fillStyle = player.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
     }
 
-    // 繪製右下角搖桿
     if (joystick.active) {
         ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
         ctx.beginPath(); ctx.arc(joystick.curX, joystick.curY, 20, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0, 173, 181, 0.5)'; ctx.fill();
