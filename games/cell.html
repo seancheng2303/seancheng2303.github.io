@@ -3,22 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
-    <title>細胞倖存者 - 手機割草版</title>
+    <title>細胞倖存者 - 固定左下角搖桿版</title>
     <style>
         body {
             margin: 0; background-color: #0d0d11; color: white;
             font-family: sans-serif; display: flex; flex-direction: column;
             align-items: center; justify-content: center; height: 100vh; overflow: hidden;
-            /* 禁用手機預設的手勢與選取 */
-            touch-action: none;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-            user-select: none;
+            touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
         }
-        canvas {
-            background-color: #111116;
-            display: block;
-        }
+        canvas { background-color: #111116; display: block; }
         #ui {
             position: absolute; top: 10px; left: 10px; right: 10px;
             display: flex; justify-content: space-between;
@@ -26,10 +19,9 @@
             text-shadow: 0 0 5px #00adb5; z-index: 10;
         }
         #upgradeMenu {
-            display: none; position: font-size: 16px; position: absolute; 
-            background: rgba(15, 15, 25, 0.95); width: 80%; max-width: 400px;
-            border: 3px solid #ff2e63; padding: 20px; border-radius: 15px; text-align: center;
-            box-shadow: 0 0 30px rgba(255, 46, 99, 0.6); z-index: 20;
+            display: none; position: absolute; background: rgba(15, 15, 25, 0.95); 
+            width: 80%; max-width: 400px; border: 3px solid #ff2e63; padding: 20px; 
+            border-radius: 15px; text-align: center; box-shadow: 0 0 30px rgba(255, 46, 99, 0.6); z-index: 20;
         }
         .btn {
             background: #ff2e63; color: white; border: none; padding: 12px;
@@ -57,13 +49,18 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// 自動適應手機螢幕大小
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+    // 每次縮放螢幕時，重新計算固定在左下角的搖桿中心點
+    joystick.startX = 100;
+    joystick.startY = canvas.height - 100;
+    if (!joystick.active) {
+        joystick.curX = joystick.startX;
+        joystick.curY = joystick.startY;
+    }
 }
 window.addEventListener('resize', resizeCanvas);
-resizeCanvas();
 
 const levelEl = document.getElementById('level');
 const xpEl = document.getElementById('xp');
@@ -83,74 +80,76 @@ let isLaserFiring = false;
 let laserAngle = 0;
 let shieldAngle = 0;
 
-// === 虛擬搖桿狀態 ===
+// === 虛擬搖桿狀態（修改為固定位置） ===
 const joystick = {
-    startX: 0, startY: 0, // 手指按下的起點
-    curX: 0, curY: 0,     // 目前手指位置
-    active: false,        // 是否正在操作
-    maxRadius: 50,        // 搖桿最大移動半徑
-    vx: 0, vy: 0          // 輸出的移動向量
+    startX: 100,           // 固定在距離左邊 100px
+    startY: 500,           // 初始值（會在 resizeCanvas 中根據螢幕高度修正）
+    curX: 100,
+    curY: 500,
+    active: false,        // 是否被按住
+    maxRadius: 50,        // 搖桿內置最大滑動半徑
+    vx: 0, vy: 0
 };
+
+// 立即執行一次初始化畫布尺寸與搖桿位置
+resizeCanvas();
 
 const player = {
     x: canvas.width / 2,
     y: canvas.height / 2,
-    radius: 16,
-    speed: 3,
-    color: '#00adb5',
-    level: 1, xp: 0, xpNeeded: 100,
-    lastShot: 0,
-    
-    bulletCount: 1,
-    novaLevel: 0,
-    laserLevel: 0,
-    shieldLevel: 0,
-    lastNova: 0
+    radius: 16, speed: 3, color: '#00adb5',
+    level: 1, xp: 0, xpNeeded: 100, lastShot: 0,
+    bulletCount: 1, novaLevel: 0, laserLevel: 0, shieldLevel: 0, lastNova: 0
 };
 
 // === 手機觸控事件監聽 ===
 window.addEventListener('touchstart', (e) => {
     if (isPaused) return;
     const touch = e.touches[0];
-    // 如果點擊螢幕左半邊，觸發虛擬搖桿
-    if (touch.clientX < canvas.width / 2) {
+    
+    // 計算觸控點與「左下角搖桿中心」的距離
+    const distToJoystick = Math.hypot(touch.clientX - joystick.startX, touch.clientY - joystick.startY);
+    
+    // 只要玩家點擊在搖桿周圍（半徑 80px 內），就判定開始操作搖桿
+    if (distToJoystick < 80) {
         joystick.active = true;
-        joystick.startX = touch.clientX;
-        joystick.startY = touch.clientY;
-        joystick.curX = touch.clientX;
-        joystick.curY = touch.clientY;
+        updateJoystickPosition(touch.clientX, touch.clientY);
     }
 });
 
 window.addEventListener('touchmove', (e) => {
     if (!joystick.active) return;
     const touch = e.touches[0];
-    joystick.curX = touch.clientX;
-    joystick.curY = touch.clientY;
-
-    // 計算搖桿位移與角度
-    const dx = joystick.curX - joystick.startX;
-    const dy = joystick.curY - joystick.startY;
-    const dist = Math.hypot(dx, dy);
-    const angle = Math.atan2(dy, dx);
-
-    // 限制搖桿不超出最大半徑
-    if (dist > joystick.maxRadius) {
-        joystick.curX = joystick.startX + Math.cos(angle) * joystick.maxRadius;
-        joystick.curY = joystick.startY + Math.sin(angle) * joystick.maxRadius;
-    }
-
-    // 計算移動比例 (-1 ~ 1)
-    const finalDist = Math.min(dist, joystick.maxRadius);
-    joystick.vx = Math.cos(angle) * (finalDist / joystick.maxRadius);
-    joystick.vy = Math.sin(angle) * (finalDist / joystick.maxRadius);
+    updateJoystickPosition(touch.clientX, touch.clientY);
 });
 
 window.addEventListener('touchend', () => {
     joystick.active = false;
+    joystick.curX = joystick.startX; // 放開後歸位
+    joystick.curY = joystick.startY;
     joystick.vx = 0;
     joystick.vy = 0;
 });
+
+// 計算搖桿內球位置與移動向量的獨立函式
+function updateJoystickPosition(touchX, touchY) {
+    const dx = touchX - joystick.startX;
+    const dy = touchY - joystick.startY;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+
+    if (dist > joystick.maxRadius) {
+        joystick.curX = joystick.startX + Math.cos(angle) * joystick.maxRadius;
+        joystick.curY = joystick.startY + Math.sin(angle) * joystick.maxRadius;
+    } else {
+        joystick.curX = touchX;
+        joystick.curY = touchY;
+    }
+
+    const finalDist = Math.min(dist, joystick.maxRadius);
+    joystick.vx = Math.cos(angle) * (finalDist / joystick.maxRadius);
+    joystick.vy = Math.sin(angle) * (finalDist / joystick.maxRadius);
+}
 
 function spawnEnemy() {
     if (enemies.length < 30 + player.level * 3 && !isPaused) {
@@ -164,25 +163,21 @@ function spawnEnemy() {
         enemies.push({
             x: x, y: y, radius: 10,
             speed: 1.0 + (player.level * 0.05),
-            color: '#ff2e63',
-            hp: 1 + Math.floor(player.level / 6)
+            color: '#ff2e63', hp: 1 + Math.floor(player.level / 6)
         });
     }
 }
 
 function checkLevelUp() {
     if (player.xp >= player.xpNeeded) {
-        player.xp -= player.xpNeeded;
-        player.level++;
+        player.xp -= player.xpNeeded; player.level++;
         player.xpNeeded = Math.floor(player.xpNeeded * 1.3);
         showUpgradeMenu();
     }
 }
 
 function showUpgradeMenu() {
-    isPaused = true;
-    optionsDiv.innerHTML = '';
-    
+    isPaused = true; optionsDiv.innerHTML = '';
     const skills = [
         { name: '🔥 細胞核爆 (全方位清場)', action: () => player.novaLevel++ },
         { name: '⚡ 基因雷射 (自動貫穿光束)', action: () => player.laserLevel++ },
@@ -190,50 +185,28 @@ function showUpgradeMenu() {
         { name: '⚔️ 細胞分裂 (子彈數量 +1)', action: () => player.bulletCount++ },
         { name: '🏃 鞭毛特化 (移動速度 +15%)', action: () => player.speed *= 1.15 }
     ];
-
-    skills.sort(() => Math.random() - 0.5);
-    skills.slice(0, 3).forEach(skill => {
-        const btn = document.createElement('button');
-        btn.className = 'btn';
-        btn.innerText = skill.name;
-        btn.onclick = () => {
-            skill.action();
-            upgradeMenu.style.display = 'none';
-            isPaused = false;
-        };
+    skills.sort(() => Math.random() - 0.5).slice(0, 3).forEach(skill => {
+        const btn = document.createElement('button'); btn.className = 'btn'; btn.innerText = skill.name;
+        btn.onclick = () => { skill.action(); upgradeMenu.style.display = 'none'; isPaused = false; };
         optionsDiv.appendChild(btn);
     });
-
     upgradeMenu.style.display = 'block';
 }
 
 function update() {
     if (isPaused) return;
 
-    // 1. 透過搖桿數據控制玩家移動
     player.x += joystick.vx * player.speed;
     player.y += joystick.vy * player.speed;
-
-    // 限制玩家不出螢幕邊界
     player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
     player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
 
-    levelEl.innerText = player.level;
-    xpEl.innerText = player.xp;
-    xpNeededEl.innerText = player.xpNeeded;
-    killsEl.innerText = kills;
-
+    levelEl.innerText = player.level; xpEl.innerText = player.xp; xpNeededEl.innerText = player.xpNeeded; killsEl.innerText = kills;
     if (player.shieldLevel > 0) shieldAngle += 0.04;
 
-    // 2. 基礎自動射擊
     if (Date.now() - player.lastShot > 450 && enemies.length > 0) {
-        let closestEnemy = null;
-        let minDist = Infinity;
-        enemies.forEach(e => {
-            const dist = Math.hypot(e.x - player.x, e.y - player.y);
-            if (dist < minDist) { minDist = dist; closestEnemy = e; }
-        });
-
+        let closestEnemy = null; let minDist = Infinity;
+        enemies.forEach(e => { const dist = Math.hypot(e.x - player.x, e.y - player.y); if (dist < minDist) { minDist = dist; closestEnemy = e; } });
         if (closestEnemy) {
             const baseAngle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x);
             for (let i = 0; i < player.bulletCount; i++) {
@@ -241,95 +214,64 @@ function update() {
                 bullets.push({ x: player.x, y: player.y, vx: Math.cos(spreadAngle) * 7, vy: Math.sin(spreadAngle) * 7, radius: 4, type: 'normal' });
             }
             player.lastShot = Date.now();
-            
-            if (player.laserLevel > 0 && !isLaserFiring && laserTimer > 150) {
-                isLaserFiring = true;
-                laserAngle = baseAngle;
-                laserTimer = 0;
-            }
+            if (player.laserLevel > 0 && !isLaserFiring && laserTimer > 150) { isLaserFiring = true; laserAngle = baseAngle; laserTimer = 0; }
         }
     }
     laserTimer++;
 
-    // 3. 細胞核爆
     if (player.novaLevel > 0 && Date.now() - player.lastNova > Math.max(2000, 5000 - player.novaLevel * 500)) {
         const numShots = 10 + player.novaLevel * 2;
-        for (let i = 0; i < numShots; i++) {
-            const angle = (Math.PI * 2 / numShots) * i;
-            bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 5, vy: Math.sin(angle) * 5, radius: 6, type: 'nova' });
-        }
+        for (let i = 0; i < numShots; i++) { const angle = (Math.PI * 2 / numShots) * i; bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 5, vy: Math.sin(angle) * 5, radius: 6, type: 'nova' }); }
         player.lastNova = Date.now();
     }
 
-    // 4. 雷射光束判定
     if (isLaserFiring) {
         if (laserTimer < 15) {
             for (let j = enemies.length - 1; j >= 0; j--) {
-                const e = enemies[j];
-                const lineX = Math.cos(laserAngle); const lineY = Math.sin(laserAngle);
-                const vecX = e.x - player.x; const vecY = e.y - player.y;
-                const dot = vecX * lineX + vecY * lineY;
+                const e = enemies[j]; const lineX = Math.cos(laserAngle); const lineY = Math.sin(laserAngle);
+                const vecX = e.x - player.x; const vecY = e.y - player.y; const dot = vecX * lineX + vecY * lineY;
                 if (dot > 0) {
                     const projX = player.x + lineX * dot; const projY = player.y + lineY * dot;
                     if (Math.hypot(e.x - projX, e.y - projY) < e.radius + (8 + player.laserLevel * 3)) {
-                        e.hp -= 2;
-                        if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; }
+                        e.hp -= 2; if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; }
                     }
                 }
             }
         } else { isLaserFiring = false; laserTimer = 0; }
     }
 
-    // 5. 敵人與護盾
     spawnEnemy();
     for (let j = enemies.length - 1; j >= 0; j--) {
-        const e = enemies[j];
-        const angle = Math.atan2(player.y - e.y, player.x - e.x);
+        const e = enemies[j]; const angle = Math.atan2(player.y - e.y, player.x - e.x);
         e.x += Math.cos(angle) * e.speed; e.y += Math.sin(angle) * e.speed;
 
         if (player.shieldLevel > 0) {
-            const numShields = player.shieldLevel; const shieldDist = 50;
-            for (let i = 0; i < numShields; i++) {
-                const sAngle = shieldAngle + (Math.PI * 2 / numShields) * i;
-                const sX = player.x + Math.cos(sAngle) * shieldDist;
-                const sY = player.y + Math.sin(sAngle) * shieldDist;
-                if (Math.hypot(e.x - sX, e.y - sY) < e.radius + 6) {
-                    e.hp--;
-                    if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; break; }
+            for (let i = 0; i < player.shieldLevel; i++) {
+                const sAngle = shieldAngle + (Math.PI * 2 / player.shieldLevel) * i;
+                if (Math.hypot(e.x - (player.x + Math.cos(sAngle) * 50), e.y - (player.y + Math.sin(sAngle) * 50)) < e.radius + 6) {
+                    e.hp--; if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; break; }
                 }
             }
         }
-
-        if (Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
-            alert(`遊戲結束！最終等級: ${player.level}，擊殺數: ${kills}`);
-            document.location.reload();
-        }
+        if (Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) { alert(`遊戲結束！擊殺數: ${kills}`); document.location.reload(); }
     }
 
-    // 6. 子彈更新
     for (let i = bullets.length - 1; i >= 0; i--) {
         const b = bullets[i]; b.x += b.vx; b.y += b.vy;
         if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) { bullets.splice(i, 1); continue; }
-
         for (let j = enemies.length - 1; j >= 0; j--) {
             const e = enemies[j];
             if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
-                e.hp -= (b.type === 'nova') ? 2 : 1;
-                bullets.splice(i, 1);
+                e.hp -= (b.type === 'nova') ? 2 : 1; bullets.splice(i, 1);
                 if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; }
                 break;
             }
         }
     }
 
-    // 7. 經驗值吃取
     for (let i = xps.length - 1; i >= 0; i--) {
-        const xpItem = xps[i];
-        const dist = Math.hypot(player.x - xpItem.x, player.y - xpItem.y);
-        if (dist < player.radius + 60) {
-            const angle = Math.atan2(player.y - xpItem.y, player.x - xpItem.x);
-            xpItem.x += Math.cos(angle) * 5; xpItem.y += Math.sin(angle) * 5;
-        }
+        const xpItem = xps[i]; const dist = Math.hypot(player.x - xpItem.x, player.y - xpItem.y);
+        if (dist < player.radius + 60) { const angle = Math.atan2(player.y - xpItem.y, player.x - xpItem.x); xpItem.x += Math.cos(angle) * 5; xpItem.y += Math.sin(angle) * 5; }
         if (dist < player.radius + xpItem.radius) { player.xp += 34; xps.splice(i, 1); checkLevelUp(); }
     }
 }
@@ -337,65 +279,48 @@ function update() {
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 網格背景
+    // 背景網格
     ctx.strokeStyle = '#1a1a24'; ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
     for (let y = 0; y < canvas.height; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
 
-    xps.forEach(xpItem => {
-        ctx.beginPath(); ctx.arc(xpItem.x, xpItem.y, xpItem.radius, 0, Math.PI * 2);
-        ctx.fillStyle = xpItem.color; ctx.fill();
-    });
+    xps.forEach(xpItem => { ctx.beginPath(); ctx.arc(xpItem.x, xpItem.y, xpItem.radius, 0, Math.PI * 2); ctx.fillStyle = xpItem.color; ctx.fill(); });
 
     if (isLaserFiring) {
-        ctx.save(); ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 230, 0, 0.8)';
-        ctx.lineWidth = 8 + player.laserLevel * 3; ctx.lineCap = 'round';
+        ctx.save(); ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 230, 0, 0.8)'; ctx.lineWidth = 8 + player.laserLevel * 3; ctx.lineCap = 'round';
         ctx.moveTo(player.x, player.y); ctx.lineTo(player.x + Math.cos(laserAngle) * 1000, player.y + Math.sin(laserAngle) * 1000);
         ctx.stroke(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
     }
 
-    bullets.forEach(b => {
-        ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fillStyle = (b.type === 'nova') ? '#ff9f43' : '#ffff00'; ctx.fill();
-    });
+    bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2); ctx.fillStyle = (b.type === 'nova') ? '#ff9f43' : '#ffff00'; ctx.fill(); });
 
     if (player.shieldLevel > 0) {
         for (let i = 0; i < player.shieldLevel; i++) {
             const sAngle = shieldAngle + (Math.PI * 2 / player.shieldLevel) * i;
-            ctx.beginPath(); ctx.arc(player.x + Math.cos(sAngle) * 50, player.y + Math.sin(sAngle) * 50, 6, 0, Math.PI * 2);
-            ctx.fillStyle = '#00f5ff'; ctx.fill();
+            ctx.beginPath(); ctx.arc(player.x + Math.cos(sAngle) * 50, player.y + Math.sin(sAngle) * 50, 6, 0, Math.PI * 2); ctx.fillStyle = '#00f5ff'; ctx.fill();
         }
     }
 
-    enemies.forEach(e => {
-        ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-        ctx.fillStyle = e.color; ctx.fill();
-    });
+    enemies.forEach(e => { ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2); ctx.fillStyle = e.color; ctx.fill(); });
 
-    // 畫玩家
-    ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-    ctx.fillStyle = player.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.beginPath(); ctx.arc(player.x, player.y, player.radius * 0.4, 0, Math.PI * 2);
-    ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fill();
+    // 玩家
+    ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2); ctx.fillStyle = player.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(player.x, player.y, player.radius * 0.4, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fill();
 
-    // === 繪製虛擬搖桿 UI ===
-    if (joystick.active) {
-        // 外大圓
-        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 2; ctx.fill(); ctx.stroke();
-        // 內小圓（中心按鈕）
-        ctx.beginPath(); ctx.arc(joystick.curX, joystick.curY, 20, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(0, 173, 181, 0.5)'; ctx.fill();
-    }
+    // === 繪製固定在左下角的虛擬搖桿 ===
+    // 外大圓：未點擊時低透明度(0.05)，按住時變亮(0.15)
+    ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2);
+    ctx.fillStyle = joystick.active ? 'rgba(255, 255, 255, 0.15)' : 'rgba(255, 255, 255, 0.05)';
+    ctx.strokeStyle = joystick.active ? 'rgba(255, 255, 255, 0.4)' : 'rgba(255, 255, 255, 0.15)';
+    ctx.lineWidth = 2; ctx.fill(); ctx.stroke();
+    
+    // 內小圓（搖桿中心點）
+    ctx.beginPath(); ctx.arc(joystick.curX, joystick.curY, 18, 0, Math.PI * 2);
+    ctx.fillStyle = joystick.active ? 'rgba(0, 173, 181, 0.6)' : 'rgba(0, 173, 181, 0.2)';
+    ctx.fill();
 }
 
-function gameLoop() {
-    update();
-    draw();
-    requestAnimationFrame(gameLoop);
-}
-
+function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
 gameLoop();
 </script>
 
