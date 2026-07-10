@@ -39,10 +39,13 @@ document.addEventListener('DOMContentLoaded', () => {
     function createUI() {
         const sidebarContainer = document.getElementById('sidebar-container');
         // Mobile-only elements
-        mobileMenuBtn = document.createElement('button');
-        mobileMenuBtn.id = 'mobile-menu-btn';
-        mobileMenuBtn.innerHTML = `<i class="fas fa-bars"></i>`;
-        document.body.appendChild(mobileMenuBtn);
+        mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        if (!mobileMenuBtn) {
+            mobileMenuBtn = document.createElement('button');
+            mobileMenuBtn.id = 'mobile-menu-btn';
+            mobileMenuBtn.innerHTML = `<i class="fas fa-bars"></i>`;
+            document.body.appendChild(mobileMenuBtn);
+        }
 
         overlay = document.createElement('div');
         overlay.id = 'overlay';
