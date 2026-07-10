@@ -2,53 +2,68 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>細胞倖存者 - 進化覺醒版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no">
+    <title>細胞倖存者 - 手機割草版</title>
     <style>
         body {
             margin: 0; background-color: #0d0d11; color: white;
             font-family: sans-serif; display: flex; flex-direction: column;
             align-items: center; justify-content: center; height: 100vh; overflow: hidden;
+            /* 禁用手機預設的手勢與選取 */
+            touch-action: none;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         canvas {
-            border: 3px solid #00adb5; background-color: #111116;
-            box-shadow: 0 0 40px rgba(0, 173, 181, 0.4);
+            background-color: #111116;
+            display: block;
         }
         #ui {
-            width: 800px; display: flex; justify-content: space-between;
-            margin-bottom: 10px; font-size: 18px; font-weight: bold;
-            text-shadow: 0 0 5px #00adb5;
+            position: absolute; top: 10px; left: 10px; right: 10px;
+            display: flex; justify-content: space-between;
+            font-size: 14px; font-weight: bold; pointer-events: none;
+            text-shadow: 0 0 5px #00adb5; z-index: 10;
         }
         #upgradeMenu {
-            display: none; position: absolute; background: rgba(15, 15, 25, 0.95);
-            border: 3px solid #ff2e63; padding: 25px; border-radius: 15px; text-align: center;
-            box-shadow: 0 0 30px rgba(255, 46, 99, 0.6);
+            display: none; position: font-size: 16px; position: absolute; 
+            background: rgba(15, 15, 25, 0.95); width: 80%; max-width: 400px;
+            border: 3px solid #ff2e63; padding: 20px; border-radius: 15px; text-align: center;
+            box-shadow: 0 0 30px rgba(255, 46, 99, 0.6); z-index: 20;
         }
         .btn {
-            background: #ff2e63; color: white; border: none; padding: 12px 24px;
-            margin: 10px; font-size: 16px; cursor: pointer; border-radius: 8px;
-            font-weight: bold; transition: 0.2s;
+            background: #ff2e63; color: white; border: none; padding: 12px;
+            margin: 8px 0; font-size: 14px; cursor: pointer; border-radius: 8px;
+            font-weight: bold; width: 100%; box-sizing: border-box;
         }
-        .btn:hover { background: #00adb5; box-shadow: 0 0 15px #00adb5; }
     </style>
 </head>
 <body>
 
 <div id="ui">
-    <div>等級: <span id="level">1</span></div>
-    <div>經驗值: <span id="xp">0</span> / <span id="xpNeeded">100</span></div>
-    <div>擊殺數: <span id="kills">0</span></div>
+    <div>LV: <span id="level">1</span></div>
+    <div>XP: <span id="xp">0</span>/<span id="xpNeeded">100</span></div>
+    <div>KILLS: <span id="kills">0</span></div>
 </div>
 
-<canvas id="gameCanvas" width="800" height="600"></canvas>
+<canvas id="gameCanvas"></canvas>
 
 <div id="upgradeMenu">
-    <h3 style="color: #ff2e63; font-size: 22px;">🧬 細胞突變！選擇你的究極能力：</h3>
+    <h3 style="color: #ff2e63; font-size: 18px; margin-top: 0;">🧬 細胞突變！選擇進化能力：</h3>
     <div id="options"></div>
 </div>
 
 <script>
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
+
+// 自動適應手機螢幕大小
+function resizeCanvas() {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
 
 const levelEl = document.getElementById('level');
 const xpEl = document.getElementById('xp');
@@ -58,41 +73,87 @@ const upgradeMenu = document.getElementById('upgradeMenu');
 const optionsDiv = document.getElementById('options');
 
 let isPaused = false;
-let keys = {};
 let bullets = [];
 let enemies = [];
 let xps = [];
 let kills = 0;
 
-// 鐳射與護盾的動畫控制變數
 let laserTimer = 0;
 let isLaserFiring = false;
 let laserAngle = 0;
 let shieldAngle = 0;
 
-// 玩家屬性與技能等級
+// === 虛擬搖桿狀態 ===
+const joystick = {
+    startX: 0, startY: 0, // 手指按下的起點
+    curX: 0, curY: 0,     // 目前手指位置
+    active: false,        // 是否正在操作
+    maxRadius: 50,        // 搖桿最大移動半徑
+    vx: 0, vy: 0          // 輸出的移動向量
+};
+
 const player = {
     x: canvas.width / 2,
     y: canvas.height / 2,
-    radius: 18,
+    radius: 16,
     speed: 3,
     color: '#00adb5',
     level: 1, xp: 0, xpNeeded: 100,
     lastShot: 0,
     
-    // === 技能等級系統 ===
-    bulletCount: 1,       // 基礎子彈數
-    novaLevel: 0,         // 細胞核爆等級 (360度彈幕)
-    laserLevel: 0,        // 基因雷射等級 (貫穿直線)
-    shieldLevel: 0,       // 細胞壁護盾等級 (旋轉防禦球)
+    bulletCount: 1,
+    novaLevel: 0,
+    laserLevel: 0,
+    shieldLevel: 0,
     lastNova: 0
 };
 
-window.addEventListener('keydown', e => keys[e.key.toLowerCase()] = true);
-window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+// === 手機觸控事件監聽 ===
+window.addEventListener('touchstart', (e) => {
+    if (isPaused) return;
+    const touch = e.touches[0];
+    // 如果點擊螢幕左半邊，觸發虛擬搖桿
+    if (touch.clientX < canvas.width / 2) {
+        joystick.active = true;
+        joystick.startX = touch.clientX;
+        joystick.startY = touch.clientY;
+        joystick.curX = touch.clientX;
+        joystick.curY = touch.clientY;
+    }
+});
+
+window.addEventListener('touchmove', (e) => {
+    if (!joystick.active) return;
+    const touch = e.touches[0];
+    joystick.curX = touch.clientX;
+    joystick.curY = touch.clientY;
+
+    // 計算搖桿位移與角度
+    const dx = joystick.curX - joystick.startX;
+    const dy = joystick.curY - joystick.startY;
+    const dist = Math.hypot(dx, dy);
+    const angle = Math.atan2(dy, dx);
+
+    // 限制搖桿不超出最大半徑
+    if (dist > joystick.maxRadius) {
+        joystick.curX = joystick.startX + Math.cos(angle) * joystick.maxRadius;
+        joystick.curY = joystick.startY + Math.sin(angle) * joystick.maxRadius;
+    }
+
+    // 計算移動比例 (-1 ~ 1)
+    const finalDist = Math.min(dist, joystick.maxRadius);
+    joystick.vx = Math.cos(angle) * (finalDist / joystick.maxRadius);
+    joystick.vy = Math.sin(angle) * (finalDist / joystick.maxRadius);
+});
+
+window.addEventListener('touchend', () => {
+    joystick.active = false;
+    joystick.vx = 0;
+    joystick.vy = 0;
+});
 
 function spawnEnemy() {
-    if (enemies.length < 40 + player.level * 5 && !isPaused) {
+    if (enemies.length < 30 + player.level * 3 && !isPaused) {
         const edge = Math.floor(Math.random() * 4);
         let x, y;
         if (edge === 0) { x = Math.random() * canvas.width; y = -20; }
@@ -101,10 +162,10 @@ function spawnEnemy() {
         else { x = -20; y = Math.random() * canvas.height; }
 
         enemies.push({
-            x: x, y: y, radius: 12,
-            speed: 1.2 + (player.level * 0.08),
+            x: x, y: y, radius: 10,
+            speed: 1.0 + (player.level * 0.05),
             color: '#ff2e63',
-            hp: 1 + Math.floor(player.level / 5) // 敵人血量隨等級提升
+            hp: 1 + Math.floor(player.level / 6)
         });
     }
 }
@@ -122,16 +183,14 @@ function showUpgradeMenu() {
     isPaused = true;
     optionsDiv.innerHTML = '';
     
-    // 定義所有可升級技能
     const skills = [
-        { name: '🔥 解鎖/升級【細胞核爆】(每4秒全方位清場)', action: () => player.novaLevel++ },
-        { name: '⚡ 解鎖/升級【基因雷射】(自動貫穿雷射)', action: () => player.laserLevel++ },
-        { name: '🛡️ 解鎖/升級【細胞壁護盾】(旋轉防禦球)', action: () => player.shieldLevel++ },
-        { name: '⚔️ 基礎進化：細胞分裂 (子彈數量 +1)', action: () => player.bulletCount++ },
-        { name: '🏃 基礎進化：鞭毛特化 (移動速度 +15%)', action: () => player.speed *= 1.15 }
+        { name: '🔥 細胞核爆 (全方位清場)', action: () => player.novaLevel++ },
+        { name: '⚡ 基因雷射 (自動貫穿光束)', action: () => player.laserLevel++ },
+        { name: '🛡️ 細胞壁護盾 (旋轉防禦球)', action: () => player.shieldLevel++ },
+        { name: '⚔️ 細胞分裂 (子彈數量 +1)', action: () => player.bulletCount++ },
+        { name: '🏃 鞭毛特化 (移動速度 +15%)', action: () => player.speed *= 1.15 }
     ];
 
-    // 隨機選 3 個
     skills.sort(() => Math.random() - 0.5);
     skills.slice(0, 3).forEach(skill => {
         const btn = document.createElement('button');
@@ -151,24 +210,23 @@ function showUpgradeMenu() {
 function update() {
     if (isPaused) return;
 
-    // 1. 移動
-    if (keys['w'] && player.y > player.radius) player.y -= player.speed;
-    if (keys['s'] && player.y < canvas.height - player.radius) player.y += player.speed;
-    if (keys['a'] && player.x > player.radius) player.x -= player.speed;
-    if (keys['d'] && player.x < canvas.width - player.radius) player.x += player.speed;
+    // 1. 透過搖桿數據控制玩家移動
+    player.x += joystick.vx * player.speed;
+    player.y += joystick.vy * player.speed;
+
+    // 限制玩家不出螢幕邊界
+    player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
+    player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
 
     levelEl.innerText = player.level;
     xpEl.innerText = player.xp;
     xpNeededEl.innerText = player.xpNeeded;
     killsEl.innerText = kills;
 
-    // 護盾旋轉角度更新
-    if (player.shieldLevel > 0) {
-        shieldAngle += 0.04;
-    }
+    if (player.shieldLevel > 0) shieldAngle += 0.04;
 
-    // 2. 招式 A：基礎自動射擊 & 尋找最近敵人
-    if (Date.now() - player.lastShot > 400 && enemies.length > 0) {
+    // 2. 基礎自動射擊
+    if (Date.now() - player.lastShot > 450 && enemies.length > 0) {
         let closestEnemy = null;
         let minDist = Infinity;
         enemies.forEach(e => {
@@ -178,15 +236,13 @@ function update() {
 
         if (closestEnemy) {
             const baseAngle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x);
-            // 基礎射擊
             for (let i = 0; i < player.bulletCount; i++) {
                 const spreadAngle = baseAngle + (i - (player.bulletCount - 1) / 2) * 0.2;
-                bullets.push({ x: player.x, y: player.y, vx: Math.cos(spreadAngle) * 8, vy: Math.sin(spreadAngle) * 8, radius: 5, type: 'normal' });
+                bullets.push({ x: player.x, y: player.y, vx: Math.cos(spreadAngle) * 7, vy: Math.sin(spreadAngle) * 7, radius: 4, type: 'normal' });
             }
             player.lastShot = Date.now();
             
-            // 觸發大招：【基因雷射】（跟隨最近敵人的方向射出）
-            if (player.laserLevel > 0 && !isLaserFiring && laserTimer > 120) {
+            if (player.laserLevel > 0 && !isLaserFiring && laserTimer > 150) {
                 isLaserFiring = true;
                 laserAngle = baseAngle;
                 laserTimer = 0;
@@ -195,188 +251,122 @@ function update() {
     }
     laserTimer++;
 
-    // 3. 大招 B：【細胞核爆】(全方位 360 度彈幕)
+    // 3. 細胞核爆
     if (player.novaLevel > 0 && Date.now() - player.lastNova > Math.max(2000, 5000 - player.novaLevel * 500)) {
-        const numShots = 12 + player.novaLevel * 4; // 等級越高彈幕越密
+        const numShots = 10 + player.novaLevel * 2;
         for (let i = 0; i < numShots; i++) {
             const angle = (Math.PI * 2 / numShots) * i;
-            bullets.push({
-                x: player.x, y: player.y,
-                vx: Math.cos(angle) * 6, vy: Math.sin(angle) * 6,
-                radius: 7, type: 'nova' // 核爆子彈體積較大
-            });
+            bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 5, vy: Math.sin(angle) * 5, radius: 6, type: 'nova' });
         }
         player.lastNova = Date.now();
     }
 
-    // 4. 大招 C：【雷射光束】持續時間與傷害判定
+    // 4. 雷射光束判定
     if (isLaserFiring) {
-        if (laserTimer < 20) { // 雷射持續 20 幀
-            // 檢查所有敵人是否碰到這條雷射直線
+        if (laserTimer < 15) {
             for (let j = enemies.length - 1; j >= 0; j--) {
                 const e = enemies[j];
-                // 計算點到直線的距離 (利用投影原理的簡化版)
-                const lineX = Math.cos(laserAngle);
-                const lineY = Math.sin(laserAngle);
-                const vecX = e.x - player.x;
-                const vecY = e.y - player.y;
+                const lineX = Math.cos(laserAngle); const lineY = Math.sin(laserAngle);
+                const vecX = e.x - player.x; const vecY = e.y - player.y;
                 const dot = vecX * lineX + vecY * lineY;
-                
-                if (dot > 0) { // 只判定雷射前方的敵人
-                    const projX = player.x + lineX * dot;
-                    const projY = player.y + lineY * dot;
-                    const distToLine = Math.hypot(e.x - projX, e.y - projY);
-                    
-                    if (distToLine < e.radius + (10 + player.laserLevel * 5)) { // 雷射寬度隨等級提升
-                        e.hp -= 2; // 雷射高傷害
-                        if (e.hp <= 0) {
-                            xps.push({ x: e.x, y: e.y, radius: 4, color: '#00ff66' });
-                            enemies.splice(j, 1);
-                            kills++;
-                        }
+                if (dot > 0) {
+                    const projX = player.x + lineX * dot; const projY = player.y + lineY * dot;
+                    if (Math.hypot(e.x - projX, e.y - projY) < e.radius + (8 + player.laserLevel * 3)) {
+                        e.hp -= 2;
+                        if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; }
                     }
                 }
             }
-        } else {
-            isLaserFiring = false;
-            laserTimer = 0;
-        }
+        } else { isLaserFiring = false; laserTimer = 0; }
     }
 
-    // 5. 敵人移動與【大招 D：細胞壁護盾】碰撞
+    // 5. 敵人與護盾
     spawnEnemy();
     for (let j = enemies.length - 1; j >= 0; j--) {
         const e = enemies[j];
         const angle = Math.atan2(player.y - e.y, player.x - e.x);
-        e.x += Math.cos(angle) * e.speed;
-        e.y += Math.sin(angle) * e.speed;
+        e.x += Math.cos(angle) * e.speed; e.y += Math.sin(angle) * e.speed;
 
-        // 檢查護盾碰撞
         if (player.shieldLevel > 0) {
-            const numShields = player.shieldLevel;
-            const shieldDist = 60; // 護盾環繞半徑
+            const numShields = player.shieldLevel; const shieldDist = 50;
             for (let i = 0; i < numShields; i++) {
                 const sAngle = shieldAngle + (Math.PI * 2 / numShields) * i;
                 const sX = player.x + Math.cos(sAngle) * shieldDist;
                 const sY = player.y + Math.sin(sAngle) * shieldDist;
-                
-                if (Math.hypot(e.x - sX, e.y - sY) < e.radius + 8) { // 護盾半徑為 8
+                if (Math.hypot(e.x - sX, e.y - sY) < e.radius + 6) {
                     e.hp--;
-                    if (e.hp <= 0) {
-                        xps.push({ x: e.x, y: e.y, radius: 4, color: '#00ff66' });
-                        enemies.splice(j, 1);
-                        kills++;
-                        break;
-                    }
+                    if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; break; }
                 }
             }
         }
 
-        // 檢查玩家受傷
         if (Math.hypot(player.x - e.x, player.y - e.y) < player.radius + e.radius) {
-            alert(`細胞壁被攻破！最終等級: ${player.level}，擊殺數: ${kills}`);
+            alert(`遊戲結束！最終等級: ${player.level}，擊殺數: ${kills}`);
             document.location.reload();
         }
     }
 
-    // 6. 普通/核爆子彈更新
+    // 6. 子彈更新
     for (let i = bullets.length - 1; i >= 0; i--) {
-        const b = bullets[i];
-        b.x += b.vx; b.y += b.vy;
-
-        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
-            bullets.splice(i, 1); continue;
-        }
+        const b = bullets[i]; b.x += b.vx; b.y += b.vy;
+        if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) { bullets.splice(i, 1); continue; }
 
         for (let j = enemies.length - 1; j >= 0; j--) {
             const e = enemies[j];
-            if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + b.radius) {
-                e.hp -= (b.type === 'nova') ? 2 : 1; // 核爆子彈威力更強
+            if (Math.hypot(b.x - e.x, b.y - e.y) < b.radius + e.radius) {
+                e.hp -= (b.type === 'nova') ? 2 : 1;
                 bullets.splice(i, 1);
-                if (e.hp <= 0) {
-                    xps.push({ x: e.x, y: e.y, radius: 4, color: '#00ff66' });
-                    enemies.splice(j, 1);
-                    kills++;
-                }
+                if (e.hp <= 0) { xps.push({ x: e.x, y: e.y, radius: 3, color: '#00ff66' }); enemies.splice(j, 1); kills++; }
                 break;
             }
         }
     }
 
-    // 7. 經驗值晶體
+    // 7. 經驗值吃取
     for (let i = xps.length - 1; i >= 0; i--) {
         const xpItem = xps[i];
         const dist = Math.hypot(player.x - xpItem.x, player.y - xpItem.y);
-        if (dist < player.radius + 70) { // 磁鐵吸引半徑
+        if (dist < player.radius + 60) {
             const angle = Math.atan2(player.y - xpItem.y, player.x - xpItem.x);
-            xpItem.x += Math.cos(angle) * 6; xpItem.y += Math.sin(angle) * 6;
+            xpItem.x += Math.cos(angle) * 5; xpItem.y += Math.sin(angle) * 5;
         }
-        if (dist < player.radius + xpItem.radius) {
-            player.xp += 34;
-            xps.splice(i, 1);
-            checkLevelUp();
-        }
+        if (dist < player.radius + xpItem.radius) { player.xp += 34; xps.splice(i, 1); checkLevelUp(); }
     }
 }
 
 function draw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // 網格
+    // 網格背景
     ctx.strokeStyle = '#1a1a24'; ctx.lineWidth = 1;
     for (let x = 0; x < canvas.width; x += 50) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke(); }
     for (let y = 0; y < canvas.height; y += 50) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke(); }
 
-    // 畫經驗值
     xps.forEach(xpItem => {
         ctx.beginPath(); ctx.arc(xpItem.x, xpItem.y, xpItem.radius, 0, Math.PI * 2);
-        ctx.fillStyle = xpItem.color; ctx.shadowBlur = 10; ctx.shadowColor = '#00ff66'; ctx.fill();
+        ctx.fillStyle = xpItem.color; ctx.fill();
     });
-    ctx.shadowBlur = 0; // 重置陰影
 
-    // 畫基因雷射 (特效)
     if (isLaserFiring) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgba(255, 230, 0, 0.8)';
-        ctx.lineWidth = 12 + player.laserLevel * 4;
-        ctx.lineCap = 'round';
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = '#ffcc00';
-        ctx.moveTo(player.x, player.y);
-        ctx.lineTo(player.x + Math.cos(laserAngle) * 1000, player.y + Math.sin(laserAngle) * 1000);
-        ctx.stroke();
-        
-        // 雷射核心白光
-        ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 4 + player.laserLevel;
-        ctx.stroke();
-        ctx.restore();
+        ctx.save(); ctx.beginPath(); ctx.strokeStyle = 'rgba(255, 230, 0, 0.8)';
+        ctx.lineWidth = 8 + player.laserLevel * 3; ctx.lineCap = 'round';
+        ctx.moveTo(player.x, player.y); ctx.lineTo(player.x + Math.cos(laserAngle) * 1000, player.y + Math.sin(laserAngle) * 1000);
+        ctx.stroke(); ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 3; ctx.stroke(); ctx.restore();
     }
 
-    // 畫子彈
     bullets.forEach(b => {
         ctx.beginPath(); ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
-        ctx.fillStyle = (b.type === 'nova') ? '#ff9f43' : '#ffff00';
-        ctx.fill();
+        ctx.fillStyle = (b.type === 'nova') ? '#ff9f43' : '#ffff00'; ctx.fill();
     });
 
-    // 畫細胞壁護盾 (旋轉防禦球)
     if (player.shieldLevel > 0) {
-        const numShields = player.shieldLevel;
-        const shieldDist = 60;
-        for (let i = 0; i < numShields; i++) {
-            const sAngle = shieldAngle + (Math.PI * 2 / numShields) * i;
-            const sX = player.x + Math.cos(sAngle) * shieldDist;
-            const sY = player.y + Math.sin(sAngle) * shieldDist;
-            
-            ctx.beginPath(); ctx.arc(sX, sY, 8, 0, Math.PI * 2);
-            ctx.fillStyle = '#00f5ff'; ctx.shadowBlur = 10; ctx.shadowColor = '#00f5ff'; ctx.fill();
+        for (let i = 0; i < player.shieldLevel; i++) {
+            const sAngle = shieldAngle + (Math.PI * 2 / player.shieldLevel) * i;
+            ctx.beginPath(); ctx.arc(player.x + Math.cos(sAngle) * 50, player.y + Math.sin(sAngle) * 50, 6, 0, Math.PI * 2);
+            ctx.fillStyle = '#00f5ff'; ctx.fill();
         }
-        ctx.shadowBlur = 0;
     }
 
-    // 畫敵人
     enemies.forEach(e => {
         ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
         ctx.fillStyle = e.color; ctx.fill();
@@ -384,12 +374,20 @@ function draw() {
 
     // 畫玩家
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-    ctx.fillStyle = player.color; ctx.fill();
-    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
-    
-    // 細胞核
+    ctx.fillStyle = player.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
     ctx.beginPath(); ctx.arc(player.x, player.y, player.radius * 0.4, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.4)'; ctx.fill();
+
+    // === 繪製虛擬搖桿 UI ===
+    if (joystick.active) {
+        // 外大圓
+        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.1)'; ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+        ctx.lineWidth = 2; ctx.fill(); ctx.stroke();
+        // 內小圓（中心按鈕）
+        ctx.beginPath(); ctx.arc(joystick.curX, joystick.curY, 20, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(0, 173, 181, 0.5)'; ctx.fill();
+    }
 }
 
 function gameLoop() {
