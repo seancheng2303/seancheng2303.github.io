@@ -167,28 +167,36 @@ function selectCharacter(type) {
     gameLoop();
 }
 
-// 觸控監聽
-window.addEventListener('touchstart', (e) => {
+// 搖桿共用邏輯
+function joystickStart(clientX, clientY) {
     if (!gameStarted || isPaused) return;
-    const touch = e.touches[0];
-    if (Math.hypot(touch.clientX - joystick.startX, touch.clientY - joystick.startY) < 100) joystick.active = true;
-});
-window.addEventListener('touchmove', (e) => {
+    if (Math.hypot(clientX - joystick.startX, clientY - joystick.startY) < 100) joystick.active = true;
+}
+function joystickMove(clientX, clientY) {
     if (!joystick.active) return;
-    const touch = e.touches[0];
-    const dx = touch.clientX - joystick.startX, dy = touch.clientY - joystick.startY;
+    const dx = clientX - joystick.startX, dy = clientY - joystick.startY;
     const dist = Math.hypot(dx, dy), angle = Math.atan2(dy, dx);
     if (dist > joystick.maxRadius) {
         joystick.curX = joystick.startX + Math.cos(angle) * joystick.maxRadius;
         joystick.curY = joystick.startY + Math.sin(angle) * joystick.maxRadius;
-    } else { joystick.curX = touch.clientX; joystick.curY = touch.clientY; }
+    } else { joystick.curX = clientX; joystick.curY = clientY; }
     const moveDist = Math.min(dist, joystick.maxRadius);
     joystick.vx = Math.cos(angle) * (moveDist / joystick.maxRadius);
     joystick.vy = Math.sin(angle) * (moveDist / joystick.maxRadius);
-});
-window.addEventListener('touchend', () => {
+}
+function joystickEnd() {
     joystick.active = false; joystick.curX = joystick.startX; joystick.curY = joystick.startY; joystick.vx = 0; joystick.vy = 0;
-});
+}
+
+// 觸控監聯
+window.addEventListener('touchstart', (e) => { joystickStart(e.touches[0].clientX, e.touches[0].clientY); });
+window.addEventListener('touchmove', (e) => { joystickMove(e.touches[0].clientX, e.touches[0].clientY); });
+window.addEventListener('touchend', () => { joystickEnd(); });
+
+// 滑鼠監聽
+window.addEventListener('mousedown', (e) => { joystickStart(e.clientX, e.clientY); });
+window.addEventListener('mousemove', (e) => { joystickMove(e.clientX, e.clientY); });
+window.addEventListener('mouseup', () => { joystickEnd(); });
 
 // === 病毒敵人生成邏輯 ===
 let lastSpawn = 0;
@@ -491,12 +499,30 @@ function draw() {
         ctx.fillStyle = player.color; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5; ctx.stroke();
     }
 
-    if (joystick.active) {
-        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
-        ctx.beginPath(); ctx.arc(joystick.curX, joystick.curY, 20, 0, Math.PI * 2); ctx.fillStyle = 'rgba(0, 173, 181, 0.5)'; ctx.fill();
-    } else {
-        ctx.beginPath(); ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2); ctx.strokeStyle = 'rgba(255,255,255,0.04)'; ctx.stroke();
-    }
+    // 繪製右下角搖桿 (始終可見)
+    // 外圈底座
+    ctx.beginPath();
+    ctx.arc(joystick.startX, joystick.startY, joystick.maxRadius, 0, Math.PI * 2);
+    ctx.fillStyle = joystick.active ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.06)';
+    ctx.fill();
+    ctx.strokeStyle = joystick.active ? 'rgba(0, 173, 181, 0.6)' : 'rgba(255,255,255,0.2)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // 十字導引線
+    ctx.strokeStyle = joystick.active ? 'rgba(0,173,181,0.25)' : 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(joystick.startX - joystick.maxRadius * 0.6, joystick.startY); ctx.lineTo(joystick.startX + joystick.maxRadius * 0.6, joystick.startY); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(joystick.startX, joystick.startY - joystick.maxRadius * 0.6); ctx.lineTo(joystick.startX, joystick.startY + joystick.maxRadius * 0.6); ctx.stroke();
+
+    // 搖桿圓鈕
+    ctx.beginPath();
+    ctx.arc(joystick.curX, joystick.curY, 20, 0, Math.PI * 2);
+    ctx.fillStyle = joystick.active ? 'rgba(0, 173, 181, 0.6)' : 'rgba(0, 173, 181, 0.3)';
+    ctx.fill();
+    ctx.strokeStyle = joystick.active ? 'rgba(0, 230, 240, 0.8)' : 'rgba(0, 173, 181, 0.5)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
 }
 
 function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
