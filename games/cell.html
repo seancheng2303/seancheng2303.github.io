@@ -29,6 +29,18 @@
         .char-card:hover { border-color: #00adb5; transform: scale(1.03); }
         .char-card h3 { margin: 5px 0; font-size: 18px; }
         .char-card p { font-size: 13px; color: #aaa; line-height: 1.4; }
+        .char-card img {
+            width: 80px; height: 80px; object-fit: contain;
+            margin: 8px auto 4px; display: block;
+            border-radius: 50%; padding: 6px;
+            background: radial-gradient(circle, rgba(255,255,255,0.06) 0%, transparent 70%);
+            filter: drop-shadow(0 0 8px rgba(0,173,181,0.4));
+            transition: transform 0.3s, filter 0.3s;
+        }
+        .char-card:hover img {
+            transform: scale(1.12);
+            filter: drop-shadow(0 0 14px rgba(0,173,181,0.7));
+        }
         
         /* 遊戲內 UI */
         #ui {
@@ -63,16 +75,19 @@
     <h2 style="color: #00adb5; margin-bottom: 25px; text-shadow: 0 0 10px rgba(0,173,181,0.5);">🧬 選擇你的免疫細胞</h2>
     <div class="card-container">
         <div class="char-card" onclick="selectCharacter('neutrophil')">
+            <img src="../assets/cell/cell_neutrophil.png" alt="嗜中性球">
             <h3 style="color: #00adb5;">🎯 嗜中性球</h3>
             <p style="color: #00ff66; font-weight:bold;">定位：平衡遠程</p>
             <p>武器：活性氧彈 (高頻單體)<br>特性：擊殺病毒時有 15% 機率直接吞噬，額外獲得經驗值。</p>
         </div>
         <div class="char-card" onclick="selectCharacter('macrophage')">
+            <img src="../assets/cell/cell_macrophage.png" alt="巨噬細胞">
             <h3 style="color: #ff9f43;">🛡️ 巨噬細胞</h3>
             <p style="color: #00ff66; font-weight:bold;">定位：陣地坦克</p>
             <p>武器：偽足掃擊 (周圍群攻)<br>特性：體型較大、血量極高 (+50)，且擁有更大的經驗吸收範圍。</p>
         </div>
         <div class="char-card" onclick="selectCharacter('killerT')">
+            <img src="../assets/cell/cell_killer_t.png" alt="殺手T細胞">
             <h3 style="color: #ff2e63;">⚡ 殺手 T 細胞</h3>
             <p style="color: #00ff66; font-weight:bold;">定位：高爆刺客</p>
             <p>武器：穿孔素穿刺 (直線貫穿)<br>特性：移動速度極快 (+20%)，對低血量病毒造成雙倍傷害。</p>
@@ -152,7 +167,7 @@ function selectCharacter(type) {
         player.color = '#00adb5'; player.charName = '嗜中性球';
     } else if (type === 'macrophage') {
         player.color = '#ff9f43'; player.charName = '巨噬細胞';
-        player.maxHp = 150; player.hp = 150; player.radius = 23; player.speed = 2.9; player.magnetRange = 130;
+        player.maxHp = 150; player.hp = 150; player.radius = 36; player.speed = 2.9; player.magnetRange = 130;
     } else if (type === 'killerT') {
         player.color = '#ff2e63'; player.charName = '殺手 T 細胞';
         player.speed = 4.1;
@@ -188,7 +203,7 @@ function joystickEnd() {
     joystick.active = false; joystick.curX = joystick.startX; joystick.curY = joystick.startY; joystick.vx = 0; joystick.vy = 0;
 }
 
-// 觸控監聯
+// 觸控監聽
 window.addEventListener('touchstart', (e) => { joystickStart(e.touches[0].clientX, e.touches[0].clientY); });
 window.addEventListener('touchmove', (e) => { joystickMove(e.touches[0].clientX, e.touches[0].clientY); });
 window.addEventListener('touchend', () => { joystickEnd(); });
@@ -197,6 +212,41 @@ window.addEventListener('touchend', () => { joystickEnd(); });
 window.addEventListener('mousedown', (e) => { joystickStart(e.clientX, e.clientY); });
 window.addEventListener('mousemove', (e) => { joystickMove(e.clientX, e.clientY); });
 window.addEventListener('mouseup', () => { joystickEnd(); });
+
+// 鍵盤控制 (WASD / 方向鍵)
+const keys = {};
+window.addEventListener('keydown', (e) => {
+    if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        keys[e.key] = true;
+        updateKeyboardJoystick();
+    }
+});
+window.addEventListener('keyup', (e) => {
+    if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        keys[e.key] = false;
+        updateKeyboardJoystick();
+    }
+});
+function updateKeyboardJoystick() {
+    if (!gameStarted || isPaused) return;
+    let kx = 0, ky = 0;
+    if (keys['a'] || keys['ArrowLeft'])  kx -= 1;
+    if (keys['d'] || keys['ArrowRight']) kx += 1;
+    if (keys['w'] || keys['ArrowUp'])    ky -= 1;
+    if (keys['s'] || keys['ArrowDown'])  ky += 1;
+    const len = Math.hypot(kx, ky);
+    if (len > 0) {
+        joystick.vx = kx / len;
+        joystick.vy = ky / len;
+        joystick.active = true;
+        joystick.curX = joystick.startX + joystick.vx * joystick.maxRadius;
+        joystick.curY = joystick.startY + joystick.vy * joystick.maxRadius;
+    } else {
+        joystickEnd();
+    }
+}
 
 // === 病毒敵人生成邏輯 ===
 let lastSpawn = 0;
