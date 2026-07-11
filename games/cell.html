@@ -15,7 +15,7 @@
             touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none;
         }
         
-        canvas { background-color: #0b0b12; display: none; vertical-align: bottom; }
+        canvas { background-color: #0b0b12; display: none; width: 100%; height: 100%; touch-action: none; }
         
         /* 角色選擇介面 */
         #charSelectScreen {
@@ -285,30 +285,32 @@ function selectCharacter(type) {
     gameLoop();
 }
 
-// 搖桿共用邏輯 (動態/懸浮搖桿，點擊右半邊或下半邊自動設為圓心，並精確做 Canvas 坐標轉換)
+// 搖桿共用邏輯 (動態懸浮搖桿 + Canvas 座標精確轉換)
 function joystickStart(clientX, clientY) {
     if (!gameStarted || isPaused) return;
     
-    // 獲取 canvas 在 viewport 中的實際位置，將 clientX/Y 轉換為 canvas 內的相對座標
+    // 取得 canvas 在 viewport 中的實際位置與 CSS/attribute 尺寸比例
     const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
 
-    // 如果點擊在右半邊或下半邊，將搖桿圓心設在該點
-    if (x > canvas.width * 0.3 && y > canvas.height * 0.3) {
-        joystick.startX = x;
-        joystick.startY = y;
-        joystick.curX = x;
-        joystick.curY = y;
-        joystick.active = true;
-    }
+    // 點擊畫面任意位置即啟動搖桿（以點擊位置為圓心）
+    joystick.startX = x;
+    joystick.startY = y;
+    joystick.curX = x;
+    joystick.curY = y;
+    joystick.active = true;
 }
 
 function joystickMove(clientX, clientY) {
     if (!joystick.active) return;
     const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = (clientX - rect.left) * scaleX;
+    const y = (clientY - rect.top) * scaleY;
 
     const dx = x - joystick.startX, dy = y - joystick.startY;
     const dist = Math.hypot(dx, dy), angle = Math.atan2(dy, dx);
@@ -334,45 +336,42 @@ function joystickEnd() {
     joystick.vy = 0;
 }
 
-// 觸控監聽 (註冊在 canvas 上，精確攔截防止 iframe 橡皮筋與滾動衝突)
+// 觸控監聽
+// touchstart 綁在 canvas 上：精確攔截初始點擊
+// touchmove / touchend 綁在 document 上：防止手指滑出 canvas 邊界導致搖桿卡死
 canvas.addEventListener('touchstart', (e) => { 
     if (gameStarted && !isPaused) {
         joystickStart(e.touches[0].clientX, e.touches[0].clientY);
         e.preventDefault();
     }
+    window.focus();
 }, { passive: false });
 
-canvas.addEventListener('touchmove', (e) => { 
-    if (gameStarted && !isPaused) {
+document.addEventListener('touchmove', (e) => { 
+    if (joystick.active) {
         e.preventDefault();
-        if (joystick.active) {
-            joystickMove(e.touches[0].clientX, e.touches[0].clientY); 
-        }
+        joystickMove(e.touches[0].clientX, e.touches[0].clientY); 
     }
 }, { passive: false });
 
-canvas.addEventListener('touchend', (e) => { 
-    if (gameStarted && !isPaused) {
+document.addEventListener('touchend', (e) => { 
+    if (joystick.active) {
         e.preventDefault();
         joystickEnd(); 
     }
 }, { passive: false });
 
-// 滑鼠監聽 (註冊在 canvas 上)
+// 滑鼠監聽（mousedown 綁 canvas，move/up 綁 document 防止拖出邊界）
 canvas.addEventListener('mousedown', (e) => { 
-    joystickStart(e.clientX, e.clientY); 
+    joystickStart(e.clientX, e.clientY);
+    window.focus();
 });
-canvas.addEventListener('mousemove', (e) => { 
-    joystickMove(e.clientX, e.clientY); 
+document.addEventListener('mousemove', (e) => { 
+    if (joystick.active) joystickMove(e.clientX, e.clientY); 
 });
-canvas.addEventListener('mouseup', () => { 
-    joystickEnd(); 
+document.addEventListener('mouseup', () => { 
+    if (joystick.active) joystickEnd(); 
 });
-
-// 點擊/觸碰遊戲畫面時，主動拉回鍵盤焦點，防止因外殼導航操作導致鍵盤卡死
-const focusGame = () => window.focus();
-canvas.addEventListener('mousedown', focusGame);
-canvas.addEventListener('touchstart', focusGame);
 
 // 鍵盤控制 (WASD / 方向鍵)
 const keys = {};
