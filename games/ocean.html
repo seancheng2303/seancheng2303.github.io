@@ -239,6 +239,7 @@
 
         function updateUI() {
             oxygenDisplay.innerText = `🫧 氧氣泡泡: ${Math.floor(oxygen)}`;
+            document.getElementById('btn-fish').disabled = oxygen < unitConfigs.fish.cost;
             document.getElementById('btn-cucumber').disabled = oxygen < unitConfigs.seaCucumber.cost;
             document.getElementById('btn-shark').disabled = oxygen < unitConfigs.shark.cost;
             document.getElementById('btn-squid').disabled = oxygen < unitConfigs.squid.cost;
