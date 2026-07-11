@@ -68,7 +68,7 @@
             <div id="oxygen-display">🫧 氧氣泡泡: 0</div>
         </div>
         <div class="btn-group">
-            <button id="btn-abc" class="btn" onclick="spawnUnit('seaCucumber')">🐡 河豚寶寶 (5 🫧)</button>
+            <button id="btn-abc" class="btn" onclick="spawnUnit('fish')">🐡 河豚寶寶 (5 🫧)</button>
             <button id="btn-cucumber" class="btn" onclick="spawnUnit('seaCucumber')">🪼 水母寶寶 (50 🫧)</button>
             <button id="btn-shark" class="btn" onclick="spawnUnit('shark')">🦈 生氣的鯊魚 (100 🫧)</button>
             <button id="btn-squid" class="btn" onclick="spawnUnit('squid')">🐳 暴怒的鯨魚 (150 🫧)</button>
@@ -84,7 +84,7 @@
         // --- 遊戲資料庫 (數值與外觀) ---
         const unitConfigs = {
             // 我方單位
-            seaCucumber: { emoji: '🐡', size: 20, hp: 1000, damage: 1, speed: 1.2, range: 10, cooldown: 0.1, cost: 0 },
+            fish: { emoji: '🐡', size: 20, hp: 1000, damage: 1, speed: 1.2, range: 10, cooldown: 0.1, cost: 0 },
             seaCucumber: { emoji: '🪼', size: 50, hp: 100, damage: 50, speed: 1.2, range: 10, cooldown: 0.1, cost: 50 },
             shark:       { emoji: '🦈', size: 65, hp: 300, damage: 250, speed: 2.5, range: 15, cooldown: 0.5, cost: 150 },
             squid:       { emoji: '🐳', size: 70, hp: 2000, damage: 1000, speed: 1.0, range: 10, cooldown: 0.7, cost: 300 },
