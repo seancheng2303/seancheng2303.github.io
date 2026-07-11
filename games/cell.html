@@ -305,9 +305,29 @@ function joystickEnd() {
 }
 
 // 觸控監聽
-window.addEventListener('touchstart', (e) => { joystickStart(e.touches[0].clientX, e.touches[0].clientY); });
-window.addEventListener('touchmove', (e) => { joystickMove(e.touches[0].clientX, e.touches[0].clientY); });
-window.addEventListener('touchend', () => { joystickEnd(); });
+window.addEventListener('touchstart', (e) => { 
+    if (gameStarted && !isPaused) {
+        joystickStart(e.touches[0].clientX, e.touches[0].clientY);
+        // 主動阻止預設行為 (例如 iOS 的橡皮筋回彈與捲動)，確保 iframe 中的觸控操作不會被父層視窗攔截或中斷
+        e.preventDefault();
+    }
+}, { passive: false });
+
+window.addEventListener('touchmove', (e) => { 
+    if (gameStarted && !isPaused) {
+        e.preventDefault();
+        if (joystick.active) {
+            joystickMove(e.touches[0].clientX, e.touches[0].clientY); 
+        }
+    }
+}, { passive: false });
+
+window.addEventListener('touchend', (e) => { 
+    if (gameStarted && !isPaused) {
+        e.preventDefault();
+        joystickEnd(); 
+    }
+}, { passive: false });
 
 // 滑鼠監聽
 window.addEventListener('mousedown', (e) => { joystickStart(e.clientX, e.clientY); });
@@ -434,13 +454,13 @@ function showUpgradeMenu(isBossReward = false) {
     });
 }
 
-function update() {
+function update(dt) {
     if (isPaused) return;
 
     elapsedTime = Math.floor((Date.now() - startTime) / 1000);
     document.getElementById('gameTime').innerText = `${Math.floor(elapsedTime/60).toString().padStart(2,'0')}:${(elapsedTime%60).toString().padStart(2,'0')}`;
 
-    player.x += joystick.vx * player.speed; player.y += joystick.vy * player.speed;
+    player.x += joystick.vx * player.speed * dt; player.y += joystick.vy * player.speed * dt;
     camera.x = player.x - canvas.width / 2; camera.y = player.y - canvas.height / 2;
 
     document.getElementById('level').innerText = player.level;
@@ -455,10 +475,10 @@ function update() {
         acids.push({ x: player.x, y: player.y, radius: 18 + player.acidLevel * 4, life: 2500 });
         acidTimer = Date.now();
     }
-    for (let i = acids.length - 1; i >= 0; i--) { acids[i].life -= 16; if (acids[i].life <= 0) acids.splice(i, 1); }
+    for (let i = acids.length - 1; i >= 0; i--) { acids[i].life -= 16 * dt; if (acids[i].life <= 0) acids.splice(i, 1); }
 
     if (player.freezeLevel > 0) {
-        freezeTimer++;
+        freezeTimer += dt;
         if (freezeTimer > 150) {
             enemies.forEach(e => { if (Math.hypot(e.x - player.x, e.y - player.y) < 220 + player.freezeLevel * 20) e.freezeTime = 90; });
             freezeTimer = 0;
@@ -485,7 +505,7 @@ function update() {
     }
 
     if (player.type === 'killerT' && isLaserFiring && laserTimer < 20) {
-        laserTimer++;
+        laserTimer += dt;
         enemies.forEach((e, idx) => {
             const lx = Math.cos(laserAngle), ly = Math.sin(laserAngle);
             const dot = (e.x - player.x) * lx + (e.y - player.y) * ly;
@@ -501,13 +521,13 @@ function update() {
     } else if (laserTimer >= 20) { isLaserFiring = false; }
 
     spawnLogic();
-    shieldAngle += 0.04;
+    shieldAngle += 0.04 * dt;
     
     enemies.forEach((e, idx) => {
         const dist = Math.hypot(player.x - e.x, player.y - e.y);
         const angle = Math.atan2(player.y - e.y, player.x - e.x);
 
-        if (e.freezeTime > 0) { e.freezeTime--; } 
+        if (e.freezeTime > 0) { e.freezeTime = Math.max(0, e.freezeTime - dt); } 
         else {
             if (e.type === 'ranged' && dist < 220) {
                 if (Date.now() - e.lastShot > 2200) {
@@ -519,7 +539,7 @@ function update() {
                 for(let i=0; i<6; i++) enemyBullets.push({ x: e.x, y: e.y, vx: Math.cos((Math.PI*2/6)*i)*3, vy: Math.sin((Math.PI*2/6)*i)*3, radius: 5, damage: 15 });
                 e.lastShot = Date.now();
             } else {
-                e.x += Math.cos(angle) * e.speed; e.y += Math.sin(angle) * e.speed;
+                e.x += Math.cos(angle) * e.speed * dt; e.y += Math.sin(angle) * e.speed * dt;
             }
         }
 
@@ -538,7 +558,7 @@ function update() {
     });
 
     for (let i = enemyBullets.length - 1; i >= 0; i--) {
-        const eb = enemyBullets[i]; eb.x += eb.vx; eb.y += eb.vy;
+        const eb = enemyBullets[i]; eb.x += eb.vx * dt; eb.y += eb.vy * dt;
         if (Math.hypot(player.x - eb.x, player.y - eb.y) > 900) { enemyBullets.splice(i, 1); continue; }
         if (Math.hypot(player.x - eb.x, player.y - eb.y) < player.radius + eb.radius) {
             player.hp -= eb.damage; enemyBullets.splice(i, 1);
@@ -546,7 +566,7 @@ function update() {
     }
 
     for (let i = bullets.length - 1; i >= 0; i--) {
-        const b = bullets[i]; b.x += b.vx; b.y += b.vy;
+        const b = bullets[i]; b.x += b.vx * dt; b.y += b.vy * dt;
         if (Math.hypot(player.x - b.x, player.y - b.y) > 900) { bullets.splice(i, 1); continue; }
         
         for (let j = enemies.length - 1; j >= 0; j--) {
@@ -566,7 +586,7 @@ function update() {
         const xp = xps[i]; const d = Math.hypot(player.x - xp.x, player.y - xp.y);
         if (d < actualMagnet) {
             const a = Math.atan2(player.y - xp.y, player.x - xp.x);
-            xp.x += Math.cos(a) * 7.5; xp.y += Math.sin(a) * 7.5;
+            xp.x += Math.cos(a) * 7.5 * dt; xp.y += Math.sin(a) * 7.5 * dt;
         }
         if (d < player.radius + xp.radius) {
             player.xp += xp.value; xps.splice(i, 1);
@@ -685,7 +705,21 @@ function draw() {
     ctx.stroke();
 }
 
-function gameLoop() { update(); draw(); requestAnimationFrame(gameLoop); }
+let lastTime = 0;
+function gameLoop(timestamp) {
+    if (!timestamp) {
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+    if (!lastTime) lastTime = timestamp;
+    let dt = (timestamp - lastTime) / 16.666;
+    if (dt > 4) dt = 4; // Prevent massive jumps on tab switches
+    lastTime = timestamp;
+
+    update(dt);
+    draw();
+    requestAnimationFrame(gameLoop);
+}
 </script>
 </body>
 </html>
