@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>深海大暴走 - 概念原型</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            text-align: center;
+            background-color: #0b1a2a; /* 深海背景色 */
+            color: white;
+            margin: 0;
+            padding: 20px;
+        }
+        canvas {
+            background-color: #1a3c5a; /* 海水顏色 */
+            border: 3px solid #4a90e2;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(74, 144, 226, 0.5);
+            display: block;
+            margin: 20px auto;
+        }
+        #ui-panel {
+            width: 800px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .btn {
+            background-color: #4a90e2;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .btn:hover { background-color: #357abd; }
+        .btn:disabled { background-color: #555; cursor: not-allowed; }
+        #oxygen-display { font-size: 20px; font-weight: bold; color: #00ffff; }
+    </style>
+</head>
+<body>
+
+    <h2>🌊 深海大暴走 🌊</h2>
+    <canvas id="gameCanvas" width="800" height="400"></canvas>
+    
+    <div id="ui-panel">
+        <div id="oxygen-display">氧氣泡泡: 0</div>
+        <button id="spawn-btn" class="btn" onclick="spawnPlayerUnit()">召喚海參寶寶 (消耗 50 氧氣)</button>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const oxygenDisplay = document.getElementById('oxygen-display');
+        const spawnBtn = document.getElementById('spawn-btn');
+
+        // --- 遊戲狀態管理 ---
+        let oxygen = 0;
+        let lastTime = 0;
+        let spawnEnemyTimer = 0;
+        let gameOver = false;
+
+        // --- 類別定義 ---
+        
+        // 主堡 Class
+        class Base {
+            constructor(x, y, team, color) {
+                this.x = x;
+                this.y = y;
+                this.width = 60;
+                this.height = 100;
+                this.team = team;
+                this.color = color;
+                this.hp = 500;
+                this.maxHp = 500;
+            }
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x, this.y, this.width, this.height);
+                // 畫血條
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x, this.y - 15, this.width, 5);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(this.x, this.y - 15, this.width * (this.hp / this.maxHp), 5);
+            }
+        }
+
+        // 單位 Class
+        class Unit {
+            constructor(x, y, team, config) {
+                this.x = x;
+                this.y = y;
+                this.team = team; // 'player' 或 'enemy'
+                this.width = config.size;
+                this.height = config.size;
+                this.color = config.color;
+                this.hp = config.hp;
+                this.maxHp = config.hp;
+                this.damage = config.damage;
+                this.speed = config.speed * (team === 'player' ? 1 : -1);
+                this.range = config.range;
+                this.attackCooldown = config.cooldown;
+                this.currentCooldown = 0;
+            }
+
+            update(deltaTime, enemies, enemyBase) {
+                if (this.currentCooldown > 0) {
+                    this.currentCooldown -= deltaTime;
+                }
+
+                // 尋找最近的目標 (敵方單位或敵方主堡)
+                let target = null;
+                let minDistance = Infinity;
+
+                enemies.forEach(enemy => {
+                    let dist = Math.abs(enemy.x - this.x);
+                    if (dist < minDistance && 
+                       ((this.team === 'player' && enemy.x > this.x) || 
+                        (this.team === 'enemy' && enemy.x < this.x))) {
+                        minDistance = dist;
+                        target = enemy;
+                    }
+                });
+
+                // 如果沒有單位敵人，把敵方主堡設為目標
+                let baseDist = Math.abs(enemyBase.x - this.x);
+                if (baseDist < minDistance && 
+                   ((this.team === 'player' && enemyBase.x > this.x) || 
+                    (this.team === 'enemy' && enemyBase.x < this.x))) {
+                    minDistance = baseDist;
+                    target = enemyBase;
+                }
+
+                // 戰鬥或移動邏輯
+                if (minDistance <= this.range + this.width/2) {
+                    // 攻擊範圍內，停止移動並攻擊
+                    if (this.currentCooldown <= 0) {
+                        target.hp -= this.damage;
+                        this.currentCooldown = this.attackCooldown;
+                    }
+                } else {
+                    // 不在攻擊範圍內，繼續前進
+                    this.x += this.speed * deltaTime * 60;
+                }
+            }
+
+            draw(ctx) {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x + this.width/2, this.y + this.height/2, this.width/2, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 畫血條
+                ctx.fillStyle = 'red';
+                ctx.fillRect(this.x, this.y - 10, this.width, 4);
+                ctx.fillStyle = '#00ff00';
+                ctx.fillRect(this.x, this.y - 10, this.width * (this.hp / this.maxHp), 4);
+            }
+        }
+
+        // --- 遊戲初始化 ---
+        const playerBase = new Base(20, 250, 'player', '#ffdd57'); // 寄居蟹主堡 (黃色)
+        const enemyBase = new Base(720, 250, 'enemy', '#8a2be2');  // 污染源主堡 (紫色)
+        
+        let playerUnits = [];
+        let enemyUnits = [];
+
+        // 單位設定字典
+        const unitConfigs = {
+            seaCucumber: { size: 30, color: '#2ecc71', hp: 100, damage: 10, speed: 1.5, range: 10, cooldown: 1 }, // 海參
+            plasticJelly: { size: 25, color: '#e74c3c', hp: 50, damage: 5, speed: 2, range: 10, cooldown: 0.8 } // 塑膠水母
+        };
+
+        // --- 玩家操作 ---
+        function spawnPlayerUnit() {
+            if (oxygen >= 50) {
+                oxygen -= 50;
+                playerUnits.push(new Unit(playerBase.x + 60, 320 - unitConfigs.seaCucumber.size, 'player', unitConfigs.seaCucumber));
+            }
+        }
+
+        // --- 遊戲主迴圈 ---
+        function gameLoop(timestamp) {
+            if (gameOver) return;
+            
+            const deltaTime = (timestamp - lastTime) / 1000 || 0;
+            lastTime = timestamp;
+
+            // 1. 產生資源 (每秒增加氧氣)
+            oxygen += 10 * deltaTime;
+            oxygenDisplay.innerText = `氧氣泡泡: ${Math.floor(oxygen)}`;
+            spawnBtn.disabled = oxygen < 50;
+
+            // 2. 敵方自動出兵 (每 3 秒出一次)
+            spawnEnemyTimer += deltaTime;
+            if (spawnEnemyTimer > 3) {
+                enemyUnits.push(new Unit(enemyBase.x - 20, 320 - unitConfigs.plasticJelly.size, 'enemy', unitConfigs.plasticJelly));
+                spawnEnemyTimer = 0;
+            }
+
+            // 3. 更新單位狀態 (移動與戰鬥)
+            playerUnits.forEach(unit => unit.update(deltaTime, enemyUnits, enemyBase));
+            enemyUnits.forEach(unit => unit.update(deltaTime, playerUnits, playerBase));
+
+            // 4. 清除死亡單位
+            playerUnits = playerUnits.filter(unit => unit.hp > 0);
+            enemyUnits = enemyUnits.filter(unit => unit.hp > 0);
+
+            // 5. 繪製畫面
+            ctx.clearRect(0, 0, canvas.width, canvas.height); // 清空畫布
+            
+            // 畫地板
+            ctx.fillStyle = '#2c3e50';
+            ctx.fillRect(0, 320, canvas.width, 80);
+
+            playerBase.draw(ctx);
+            enemyBase.draw(ctx);
+            playerUnits.forEach(unit => unit.draw(ctx));
+            enemyUnits.forEach(unit => unit.draw(ctx));
+
+            // 6. 判定勝負
+            if (playerBase.hp <= 0) {
+                endGame("遊戲結束！海洋被污染了...");
+            } else if (enemyBase.hp <= 0) {
+                endGame("勝利！你拯救了深海！");
+            } else {
+                requestAnimationFrame(gameLoop); // 繼續下一幀
+            }
+        }
+
+        function endGame(message) {
+            gameOver = true;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'white';
+            ctx.font = '40px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(message, canvas.width/2, canvas.height/2);
+        }
+
+        // 啟動遊戲
+        requestAnimationFrame(gameLoop);
+    </script>
+</body>
+</html>
