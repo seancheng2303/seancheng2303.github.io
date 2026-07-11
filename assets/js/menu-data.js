@@ -27,6 +27,10 @@ const menuData = [
       {
         text: 'cell',
         link: 'games/cell.html'
+      },
+      {
+        text: 'ocean',
+        link: 'games/ocean.html'
       }
     ]
   },
