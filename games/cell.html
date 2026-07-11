@@ -247,7 +247,9 @@ function resizeCanvas() {
     joystick.startY = canvas.height - 100;
     if(!joystick.active) { joystick.curX = joystick.startX; joystick.curY = joystick.startY; }
 }
-window.addEventListener('resize', resizeCanvas);
+// 使用 ResizeObserver 監聽 body 尺寸，能完美捕捉外殼側邊欄收合所引起的 iframe 大小改變
+const resizeObserver = new ResizeObserver(() => resizeCanvas());
+resizeObserver.observe(document.body);
 
 // === 玩家初始基礎數值 ===
 const player = {
@@ -333,6 +335,11 @@ window.addEventListener('touchend', (e) => {
 window.addEventListener('mousedown', (e) => { joystickStart(e.clientX, e.clientY); });
 window.addEventListener('mousemove', (e) => { joystickMove(e.clientX, e.clientY); });
 window.addEventListener('mouseup', () => { joystickEnd(); });
+
+// 點擊/觸碰遊戲畫面時，主動拉回鍵盤焦點，防止因外殼導航操作導致鍵盤卡死
+const focusGame = () => window.focus();
+window.addEventListener('mousedown', focusGame);
+window.addEventListener('touchstart', focusGame);
 
 // 鍵盤控制 (WASD / 方向鍵)
 const keys = {};

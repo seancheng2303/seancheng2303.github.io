@@ -142,8 +142,21 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (window.innerWidth < 768) { // Only on mobile
                     document.body.classList.remove('sidebar-open');
                 }
+                // 主動把焦點移到 iframe 上，讓遊戲能立刻接收到鍵盤控制事件
+                setTimeout(() => {
+                    if (showcaseFrame) showcaseFrame.focus();
+                }, 100);
             });
         });
+
+        // 監聽 iframe 載入事件，自動將焦點移入，以便遊戲接收鍵盤事件
+        if (showcaseFrame) {
+            showcaseFrame.addEventListener('load', () => {
+                setTimeout(() => {
+                    showcaseFrame.focus();
+                }, 150);
+            });
+        }
     }
 
     function closeAllSubmenus() {
