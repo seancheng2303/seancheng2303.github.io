@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>深海大暴走 - 十關挑戰版</title>
+    <title>深海大暴走 - 十關挑戰版 (含暴走河豚)</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -39,6 +39,7 @@
             display: flex;
             justify-content: center;
             gap: 10px;
+            flex-wrap: wrap; /* 讓按鈕太多時可以換行 */
         }
         .btn {
             background-color: #2c3e50;
@@ -68,10 +69,10 @@
             <div id="oxygen-display">🫧 氧氣泡泡: 0</div>
         </div>
         <div class="btn-group">
-            <button id="btn-abc" class="btn" onclick="spawnUnit('fish')">🐡 河豚寶寶 (5 🫧)</button>
             <button id="btn-cucumber" class="btn" onclick="spawnUnit('seaCucumber')">🪼 水母寶寶 (50 🫧)</button>
             <button id="btn-shark" class="btn" onclick="spawnUnit('shark')">🦈 生氣的鯊魚 (100 🫧)</button>
             <button id="btn-squid" class="btn" onclick="spawnUnit('squid')">🐳 暴怒的鯨魚 (150 🫧)</button>
+            <button id="btn-puffer" class="btn" onclick="spawnUnit('pufferFish')">🐡 暴走河豚 (10 🫧)</button>
         </div>
     </div>
 
@@ -84,10 +85,12 @@
         // --- 遊戲資料庫 (數值與外觀) ---
         const unitConfigs = {
             // 我方單位
-            fish: { emoji: '🐡', size: 20, hp: 1000, damage: 1, speed: 1.2, range: 10, cooldown: 0.1, cost: 0 },
             seaCucumber: { emoji: '🪼', size: 50, hp: 100, damage: 50, speed: 1.2, range: 10, cooldown: 0.1, cost: 50 },
-            shark:       { emoji: '🦈', size: 65, hp: 300, damage: 250, speed: 2.5, range: 15, cooldown: 0.5, cost: 150 },
-            squid:       { emoji: '🐳', size: 70, hp: 2000, damage: 1000, speed: 1.0, range: 10, cooldown: 0.7, cost: 300 },
+            shark:       { emoji: '🦈', size: 65, hp: 300, damage: 250, speed: 2.5, range: 15, cooldown: 0.5, cost: 100 }, // 修正了原本標籤寫 100 但數值 150 的問題
+            squid:       { emoji: '🐳', size: 70, hp: 2000, damage: 1000, speed: 1.0, range: 10, cooldown: 0.7, cost: 150 }, // 修正了原本標籤寫 150 但數值 300 的問題
+            
+            // 新增的暴走河豚
+            pufferFish:  { emoji: '🐡', size: 40, hp: 1000, damage: 1, speed: 100, range: 1, cooldown: 0.001, cost: 10 },
             
             // 敵方單位 (擴充版)
             plasticBag:  { emoji: '🛍️', size: 30, hp: 50,  damage: 5,  speed: 1.8, range: 10, cooldown: 0.8 },
@@ -239,10 +242,12 @@
 
         function updateUI() {
             oxygenDisplay.innerText = `🫧 氧氣泡泡: ${Math.floor(oxygen)}`;
-            document.getElementById('btn-fish').disabled = oxygen < unitConfigs.fish.cost;
             document.getElementById('btn-cucumber').disabled = oxygen < unitConfigs.seaCucumber.cost;
             document.getElementById('btn-shark').disabled = oxygen < unitConfigs.shark.cost;
             document.getElementById('btn-squid').disabled = oxygen < unitConfigs.squid.cost;
+            
+            // 新增河豚的按鈕狀態更新
+            document.getElementById('btn-puffer').disabled = oxygen < unitConfigs.pufferFish.cost;
         }
 
         function gameLoop(timestamp) {
@@ -252,7 +257,7 @@
 
             let levelData = levels[currentLevelIndex];
 
-            // 1. 資源與出兵 (後期關卡給予稍微多一點的資源補助)
+            // 1. 資源與出兵 
             let oxygenRate = 15 + (currentLevelIndex * 1.5); 
             oxygen += oxygenRate * deltaTime;
             updateUI();
