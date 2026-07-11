@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>深海大暴走 - 關卡進化版</title>
+    <title>深海大暴走 - 十關挑戰版</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -68,9 +68,9 @@
             <div id="oxygen-display">🫧 氧氣泡泡: 0</div>
         </div>
         <div class="btn-group">
-            <button id="btn-cucumber" class="btn" onclick="spawnUnit('seaCucumber')">😈 開心的惡魔 (50 🫧)</button>
-            <button id="btn-shark" class="btn" onclick="spawnUnit('shark')">👿 暴怒的惡魔 (150 🫧)</button>
-            <button id="btn-squid" class="btn" onclick="spawnUnit('squid')">🦠 無孔不入的細菌 (300 🫧)</button>
+            <button id="btn-cucumber" class="btn" onclick="spawnUnit('seaCucumber')">🪼 水母寶寶 (50 🫧)</button>
+            <button id="btn-shark" class="btn" onclick="spawnUnit('shark')">🦈 生氣的鯊魚 (150 🫧)</button>
+            <button id="btn-squid" class="btn" onclick="spawnUnit('squid')">🐳 暴怒的鯨魚 (300 🫧)</button>
         </div>
     </div>
 
@@ -83,20 +83,32 @@
         // --- 遊戲資料庫 (數值與外觀) ---
         const unitConfigs = {
             // 我方單位
-            seaCucumber: { emoji: '😈', size: 35, hp: 700, damage: 80, speed: 1.2, range: 10, cooldown: 1, cost: 50 },
-            shark:       { emoji: '👿', size: 45, hp: 1000, damage: 100, speed: 2.5, range: 15, cooldown: 0.8, cost: 150 },
-            squid:       { emoji: '🦠', size: 40, hp: 100000, damage: 400, speed: 1.0, range: 10, cooldown: 2, cost: 300 },
-            // 敵方單位
-            plasticCup:  { emoji: '🥤', size: 35, hp: 80,  damage: 8,  speed: 1.5, range: 10, cooldown: 1 },
-            tireOctopus: { emoji: '🐙', size: 50, hp: 300, damage: 20, speed: 1.0, range: 15, cooldown: 1.5 },
-            toxicSub:    { emoji: '🚢', size: 70, hp: 800, damage: 50, speed: 0.5, range: 30, cooldown: 2.5 }
+            seaCucumber: { emoji: '🪼', size: 50, hp: 1500, damage: 100, speed: 1.2, range: 10, cooldown: 1, cost: 50 },
+            shark:       { emoji: '🦈', size: 65, hp: 4000, damage: 350, speed: 2.5, range: 15, cooldown: 0.8, cost: 150 },
+            squid:       { emoji: '🐳', size: 70, hp: 10000, damage: 1000, speed: 1.0, range: 10, cooldown: 2, cost: 300 },
+            
+            // 敵方單位 (擴充版)
+            plasticBag:  { emoji: '🛍️', size: 30, hp: 50,  damage: 5,  speed: 1.8, range: 10, cooldown: 0.8 },
+            plasticCup:  { emoji: '🥤', size: 35, hp: 90,  damage: 10, speed: 1.5, range: 10, cooldown: 1 },
+            batteryCrab: { emoji: '🔋', size: 40, hp: 180, damage: 25, speed: 1.2, range: 15, cooldown: 1.2 },
+            tireOctopus: { emoji: '🍼', size: 50, hp: 350, damage: 20, speed: 1.0, range: 15, cooldown: 1.5 },
+            oilDrum:     { emoji: '🛢️', size: 55, hp: 600, damage: 40, speed: 0.8, range: 20, cooldown: 2.0 },
+            toxicSub:    { emoji: '🚢', size: 70, hp: 1200, damage: 60, speed: 0.5, range: 40, cooldown: 2.5 },
+            nukeMonster: { emoji: '☢️', size: 90, hp: 4000, damage: 100, speed: 0.4, range: 50, cooldown: 2.0 } // 終極Boss
         };
 
-        // 關卡設定
+        // 十大關卡設定
         const levels = [
-            { id: 1, name: "淺灘區", enemyBaseHp: 500, spawnInterval: 3, enemies: ['plasticCup'] },
-            { id: 2, name: "垃圾海溝", enemyBaseHp: 1200, spawnInterval: 2.5, enemies: ['plasticCup', 'tireOctopus'] },
-            { id: 3, name: "核廢料深淵", enemyBaseHp: 2500, spawnInterval: 2, enemies: ['tireOctopus', 'toxicSub'] }
+            { id: 1,  name: "陽光淺灘",    enemyBaseHp: 400,  spawnInterval: 3.5, enemies: ['plasticBag'] },
+            { id: 2,  name: "塑膠暗礁",    enemyBaseHp: 600,  spawnInterval: 3.0, enemies: ['plasticBag', 'plasticCup'] },
+            { id: 3,  name: "廢電池海床",  enemyBaseHp: 900,  spawnInterval: 2.8, enemies: ['plasticCup', 'batteryCrab'] },
+            { id: 4,  name: "垃圾海溝",    enemyBaseHp: 1300, spawnInterval: 2.5, enemies: ['plasticCup', 'batteryCrab', 'tireOctopus'] },
+            { id: 5,  name: "廢棄輪胎山",  enemyBaseHp: 1800, spawnInterval: 2.2, enemies: ['batteryCrab', 'tireOctopus'] },
+            { id: 6,  name: "漏油海域",    enemyBaseHp: 2500, spawnInterval: 2.0, enemies: ['tireOctopus', 'oilDrum'] },
+            { id: 7,  name: "鋼鐵沉船",    enemyBaseHp: 3500, spawnInterval: 1.8, enemies: ['batteryCrab', 'oilDrum', 'toxicSub'] },
+            { id: 8,  name: "漆黑深淵",    enemyBaseHp: 5000, spawnInterval: 1.5, enemies: ['oilDrum', 'toxicSub'] },
+            { id: 9,  name: "污染核心外圍", enemyBaseHp: 7000, spawnInterval: 1.2, enemies: ['tireOctopus', 'oilDrum', 'toxicSub'] },
+            { id: 10, name: "核廢料深淵",  enemyBaseHp: 9999, spawnInterval: 2.5, enemies: ['toxicSub', 'nukeMonster'] }
         ];
 
         // --- 遊戲狀態管理 ---
@@ -125,7 +137,6 @@
                 ctx.textBaseline = 'middle';
                 ctx.fillText(this.emoji, this.x + this.width/2, this.y + this.height/2);
                 
-                // 畫血條
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x, this.y - 20, this.width, 8);
                 ctx.fillStyle = '#00ff00';
@@ -156,7 +167,6 @@
                 let target = null;
                 let minDistance = Infinity;
 
-                // 找尋單位敵人
                 enemies.forEach(enemy => {
                     let dist = Math.abs(enemy.x - this.x);
                     if (dist < minDistance && ((this.team === 'player' && enemy.x > this.x) || (this.team === 'enemy' && enemy.x < this.x))) {
@@ -165,14 +175,12 @@
                     }
                 });
 
-                // 找尋敵方主堡
                 let baseDist = Math.abs(enemyBase.x - this.x) - (enemyBase.width/2);
                 if (baseDist < minDistance && ((this.team === 'player' && enemyBase.x > this.x) || (this.team === 'enemy' && enemyBase.x < this.x))) {
                     minDistance = baseDist;
                     target = enemyBase;
                 }
 
-                // 攻擊或前進
                 if (minDistance <= this.range + this.width/2) {
                     if (this.currentCooldown <= 0 && target) {
                         target.hp -= this.damage;
@@ -188,7 +196,6 @@
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 
-                // 翻轉敵人面向
                 if (this.team === 'enemy') {
                     ctx.save();
                     ctx.translate(this.x + this.width/2, this.y + this.height/2);
@@ -199,7 +206,6 @@
                     ctx.fillText(this.emoji, this.x + this.width/2, this.y + this.height/2);
                 }
                 
-                // 畫血條
                 ctx.fillStyle = 'red';
                 ctx.fillRect(this.x, this.y - 10, this.width, 4);
                 ctx.fillStyle = '#00ff00';
@@ -212,8 +218,8 @@
             let levelData = levels[currentLevelIndex];
             levelDisplay.innerText = `當前關卡：${levelData.id}. ${levelData.name}`;
             
-            playerBase = new Base(30, 240, 'player', '🐚', 1000); // 寄居蟹殼
-            enemyBase = new Base(700, 240, 'enemy', '🏭', levelData.enemyBaseHp); // 污染工廠
+            playerBase = new Base(30, 240, 'player', '🐚', 1500); 
+            enemyBase = new Base(700, 240, 'enemy', '🏭', levelData.enemyBaseHp); 
             
             playerUnits = [];
             enemyUnits = [];
@@ -243,8 +249,9 @@
 
             let levelData = levels[currentLevelIndex];
 
-            // 1. 資源與出兵
-            oxygen += 15 * deltaTime;
+            // 1. 資源與出兵 (後期關卡給予稍微多一點的資源補助)
+            let oxygenRate = 15 + (currentLevelIndex * 0.5); 
+            oxygen += oxygenRate * deltaTime;
             updateUI();
 
             spawnEnemyTimer += deltaTime;
@@ -263,7 +270,7 @@
 
             // 3. 繪圖
             ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = '#112233'; // 海底地板
+            ctx.fillStyle = '#112233'; 
             ctx.fillRect(0, 290, canvas.width, 110);
 
             playerBase.draw(ctx);
@@ -273,15 +280,15 @@
 
             // 4. 勝負與換關
             if (playerBase.hp <= 0) {
-                showScreen("主堡被摧毀了... 海洋被污染了！", true);
+                showScreen("主堡被摧毀了... 海洋被污染了！ (重新整理網頁可重試)", true);
             } else if (enemyBase.hp <= 0) {
                 if (currentLevelIndex < levels.length - 1) {
                     currentLevelIndex++;
-                    showScreen("關卡突破！進入下一區...", false);
+                    showScreen(`關卡突破！進入下一區: ${levels[currentLevelIndex].name}`, false);
                     setTimeout(() => { initLevel(); requestAnimationFrame(gameLoop); }, 2000);
-                    gameOver = true; // 暫停迴圈等待換關
+                    gameOver = true; 
                 } else {
-                    showScreen("🏆 遊戲通關！你成功拯救了深海！", true);
+                    showScreen("🏆 遊戲通關！你徹底清除了所有的污染源！", true);
                 }
             } else {
                 requestAnimationFrame(gameLoop);
@@ -293,7 +300,7 @@
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'white';
-            ctx.font = '30px Arial';
+            ctx.font = '24px Arial';
             ctx.textAlign = 'center';
             ctx.fillText(message, canvas.width/2, canvas.height/2);
         }
