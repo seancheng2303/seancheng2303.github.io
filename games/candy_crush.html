@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Candy Crush (自動合成道具版)</title>
+    <title>Candy Crush (8-bit 音樂音效版)</title>
     <style>
         body {
             display: flex; justify-content: center; align-items: center;
@@ -14,7 +14,20 @@
 
         .game-container { display: flex; flex-direction: column; align-items: center; }
 
-        .score-board { font-size: 24px; font-weight: bold; margin-bottom: 15px; color: #f1c40f; }
+        .header-panel {
+            display: flex; justify-content: space-between; align-items: center;
+            width: 400px; margin-bottom: 15px;
+        }
+
+        .score-board { font-size: 24px; font-weight: bold; color: #f1c40f; }
+
+        .music-btn {
+            background-color: #34495e; color: white; border: 2px solid #f1c40f;
+            border-radius: 8px; padding: 6px 12px; font-size: 14px;
+            cursor: pointer; font-weight: bold; transition: all 0.2s;
+        }
+        .music-btn:active { transform: scale(0.95); }
+        .music-on { background-color: #f1c40f; color: #2c3e50; }
 
         .grid {
             display: flex; flex-wrap: wrap;
@@ -35,13 +48,13 @@
 
         .grid div:hover { transform: scale(1.1); border-color: rgba(255,255,255,0.3); }
 
-        /* 道具特殊外觀 */
         .type-striped::after { content: "🚀"; }
         .type-wrapped::after { content: "💣"; }
         .type-color_bomb { background-color: #333 !important; }
         .type-color_bomb::after { content: "🌈"; }
 
         @media (max-width: 450px) {
+            .header-panel { width: 320px; }
             .grid { width: 320px; height: 320px; }
             .grid div { width: 40px; height: 40px; font-size: 18px; }
         }
@@ -49,8 +62,15 @@
 </head>
 <body>
 
+    <audio id="bg-music" loop>
+        <source src="bgm.mp3" type="audio/mpeg">
+    </audio>
+
     <div class="game-container">
-        <div class="score-board">分數: <span id="score">0</span></div>
+        <div class="header-panel">
+            <div class="score-board">分數: <span id="score">0</span></div>
+            <button id="music-toggle" class="music-btn">🎵 音樂: 關</button>
+        </div>
         <div class="grid" id="game-grid"></div>
     </div>
 
@@ -61,16 +81,64 @@
             const width = 8;
             const squares = [];
             let score = 0;
-
             const candyColors = ['#e74c3c', '#f1c40f', '#e67e22', '#9b59b6', '#2ecc71', '#3498db'];
 
-            // 建立棋盤
+            // === 🎵 音樂與 Web Audio API 8-bit 音效系統 ===
+            const bgMusic = document.getElementById('bg-music');
+            const musicBtn = document.getElementById('music-toggle');
+            let isMusicPlaying = false;
+
+            // 初始化 Web Audio API 引擎 (用來合成 8-bit 音效)
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
+
+            musicBtn.addEventListener('click', () => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                if (isMusicPlaying) {
+                    bgMusic.pause();
+                    musicBtn.textContent = '🎵 音樂: 關';
+                    musicBtn.classList.remove('music-on');
+                } else {
+                    bgMusic.play().catch(e => console.log("等待音樂載入或檔案不存在"));
+                    musicBtn.textContent = '🎵 音樂: 開';
+                    musicBtn.classList.add('music-on');
+                }
+                isMusicPlaying = !isMusicPlaying;
+            });
+
+            // 產生 8-bit 方波音效 (Square Wave)
+            function play8BitSound() {
+                if (!isMusicPlaying || audioCtx.state === 'suspended') return;
+                
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                osc.type = 'square'; // 方波是 8-bit 聲音的靈魂
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                const now = audioCtx.currentTime;
+                // 快速的「叮」聲 (頻率從 600Hz 降到 400Hz)
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(400, now + 0.1);
+                
+                // 音量控制 (避免太大聲)
+                gainNode.gain.setValueAtTime(0.05, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                
+                osc.start(now);
+                osc.stop(now + 0.1);
+            }
+
+            // ================= 遊戲核心邏輯 =================
+
             function createBoard() {
                 for (let i = 0; i < width * width; i++) {
                     const square = document.createElement('div');
                     square.setAttribute('draggable', true);
                     square.setAttribute('id', i);
-                    square.dataset.type = 'normal'; // 初始化全為普通糖果
+                    square.dataset.type = 'normal';
                     let randomColor = Math.floor(Math.random() * candyColors.length);
                     square.style.backgroundColor = candyColors[randomColor];
                     grid.appendChild(square);
@@ -80,9 +148,8 @@
             createBoard();
 
             let squareIdBeingDragged, squareIdBeingReplaced;
-            let lastActionTarget = null; // 記錄玩家最後拖曳放開的位置，用來生成道具
+            let lastActionTarget = null; 
 
-            // === 拖曳與觸控 ===
             squares.forEach(square => {
                 square.addEventListener('dragstart', dragStart);
                 square.addEventListener('dragend', dragEnd);
@@ -94,7 +161,6 @@
             });
 
             let touchStartX = 0, touchStartY = 0;
-
             function dragStart() { squareIdBeingDragged = parseInt(this.id); }
             function dragDrop() { squareIdBeingReplaced = parseInt(this.id); }
             function dragEnd() { validateMove(); }
@@ -125,7 +191,6 @@
                 validateMove();
             }
 
-            // === 核心交換邏輯 ===
             function swapSquares(id1, id2) {
                 let tempColor = squares[id1].style.backgroundColor;
                 let tempType = squares[id1].dataset.type;
@@ -147,57 +212,48 @@
                 let draggedSq = squares[squareIdBeingDragged];
                 let replacedSq = squares[squareIdBeingReplaced];
 
-                // 先交換
                 swapSquares(squareIdBeingDragged, squareIdBeingReplaced);
                 lastActionTarget = squareIdBeingReplaced; 
 
-                // 特殊互動：彩虹糖果交換
                 if (draggedSq.dataset.type === 'color_bomb' || replacedSq.dataset.type === 'color_bomb') {
                     handleColorBombInteraction(squareIdBeingDragged, squareIdBeingReplaced);
                     squareIdBeingDragged = null; squareIdBeingReplaced = null;
                     return;
                 }
 
-                // 檢查是否成功連線
-                if (!checkMatches(true)) {
-                    // 沒連線，換回來
+                if (!checkMatches()) {
                     swapSquares(squareIdBeingDragged, squareIdBeingReplaced);
                 }
                 
                 squareIdBeingDragged = null; squareIdBeingReplaced = null;
             }
 
-            // === 彩虹糖果的特殊處理 ===
             function handleColorBombInteraction(id1, id2) {
                 let bombId = squares[id1].dataset.type === 'color_bomb' ? id1 : id2;
                 let targetId = bombId === id1 ? id2 : id1;
                 let targetColor = squares[targetId].style.backgroundColor;
                 let targetType = squares[targetId].dataset.type;
 
-                // 消除彩虹糖
                 clearSquare(bombId);
 
                 if (targetType === 'normal') {
-                    // 全場同色消除
                     squares.forEach((sq, i) => {
                         if (sq.style.backgroundColor === targetColor && sq.dataset.type === 'normal') clearSquare(i);
                     });
                 } else if (targetType !== 'color_bomb') {
-                    // 彩虹 + 道具 (十字或炸彈)：把所有同色糖果變成該道具然後引爆
                     squares.forEach((sq, i) => {
                         if (sq.style.backgroundColor === targetColor) {
                             sq.dataset.type = targetType;
                             sq.className = `type-${targetType}`;
-                            clearSquare(i); // 觸發引爆
+                            clearSquare(i); 
                         }
                     });
                 }
             }
 
-            // === 消除與引爆邏輯 ===
             function clearSquare(index) {
                 let sq = squares[index];
-                if (sq.style.backgroundColor === '') return; // 已經空了
+                if (sq.style.backgroundColor === '') return; 
 
                 let type = sq.dataset.type;
                 sq.style.backgroundColor = '';
@@ -205,18 +261,19 @@
                 sq.className = '';
                 score += 5;
                 scoreDisplay.innerHTML = score;
+                
+                // 觸發消除音效
+                play8BitSound();
 
                 let row = Math.floor(index / width);
                 let col = index % width;
 
                 if (type === 'striped') {
-                    // 引爆十字
                     for (let i = 0; i < width; i++) {
                         if (squares[row * width + i].style.backgroundColor !== '') clearSquare(row * width + i);
                         if (squares[i * width + col].style.backgroundColor !== '') clearSquare(i * width + col);
                     }
                 } else if (type === 'wrapped') {
-                    // 引爆範圍 (T字)，改為 4x4 範圍 (以自己為中心大約半徑為1.5)
                     for (let r = row - 1; r <= row + 2; r++) {
                         for (let c = col - 1; c <= col + 2; c++) {
                             if (r >= 0 && r < width && c >= 0 && c < width) {
@@ -228,12 +285,10 @@
                 }
             }
 
-            // === 進階匹配與生成邏輯 ===
-            function checkMatches(isPlayerMove = false) {
+            function checkMatches() {
                 let matchedGroups = [];
                 let hasMatch = false;
 
-                // 尋找橫向
                 for (let r = 0; r < width; r++) {
                     let matchLength = 1;
                     for (let c = 0; c < width; c++) {
@@ -253,7 +308,6 @@
                     }
                 }
 
-                // 尋找直向
                 for (let c = 0; c < width; c++) {
                     let matchLength = 1;
                     for (let r = 0; r < width; r++) {
@@ -275,14 +329,11 @@
 
                 if (!hasMatch) return false;
 
-                // 處理合成邏輯
                 let toClear = new Set();
                 let spawnList = [];
 
                 matchedGroups.forEach(group => {
                     let len = group.indices.length;
-                    
-                    // 檢查 T / L 型 (同一個點出現在橫向與直向中)
                     let intersection = null;
                     matchedGroups.forEach(otherGroup => {
                         if (group !== otherGroup && group.color === otherGroup.color) {
@@ -291,7 +342,6 @@
                         }
                     });
 
-                    // 決定生成什麼
                     let spawnIndex = group.indices.includes(lastActionTarget) ? lastActionTarget : group.indices[1];
 
                     if (len >= 5) {
@@ -305,16 +355,12 @@
                     group.indices.forEach(idx => toClear.add(idx));
                 });
 
-                // 執行消除 (遇到道具會連鎖引爆)
                 toClear.forEach(idx => clearSquare(idx));
 
-                // 生成新道具
                 spawnList.forEach(spawn => {
-                    // 防止重複生成
                     if (squares[spawn.index].dataset.type === 'normal') {
                         squares[spawn.index].dataset.type = spawn.type;
                         squares[spawn.index].className = `type-${spawn.type}`;
-                        // 彩虹糖保持黑底，其他的保留原色
                         if (spawn.type !== 'color_bomb') squares[spawn.index].style.backgroundColor = spawn.color;
                         else squares[spawn.index].style.backgroundColor = 'transparent';
                     }
@@ -324,7 +370,6 @@
                 return true;
             }
 
-            // 掉落邏輯
             function moveDown() {
                 for (let i = 0; i < 56; i++) {
                     if (squares[i + width].style.backgroundColor === '') {
