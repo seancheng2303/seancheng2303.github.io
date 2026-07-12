@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>簡易版 Candy Crush (全套道具版)</title>
+    <title>簡易版 Candy Crush (完整邏輯版)</title>
     <style>
         body {
             display: flex;
@@ -36,7 +36,6 @@
             color: #d81b60;
         }
 
-        /* 道具區塊樣式：改為兩排以容納更多按鈕 */
         .props-container {
             display: flex;
             flex-wrap: wrap;
@@ -58,11 +57,7 @@
             transition: all 0.2s;
         }
 
-        .prop-btn:active {
-            transform: scale(0.95);
-        }
-
-        /* 道具啟用時的特殊樣式 */
+        .prop-btn:active { transform: scale(0.95); }
         .prop-active {
             background-color: #ffb74d !important;
             border-color: #f57c00 !important;
@@ -137,9 +132,8 @@
 
             const candyColors = ['#ef5350', '#ffee58', '#ffa726', '#ab47bc', '#66bb6a', '#29b6f6'];
 
-            // === 道具系統狀態管理 ===
-            let activeProp = null; // 記錄目前啟用哪個道具: 'hammer', 'striped', 'wrapped', 'color'
-
+            // 道具系統狀態管理
+            let activeProp = null; 
             const propButtons = {
                 'hammer': document.getElementById('hammer-btn'),
                 'striped': document.getElementById('striped-btn'),
@@ -147,17 +141,13 @@
                 'color': document.getElementById('color-btn')
             };
 
-            // 處理道具按鈕切換邏輯
             function toggleProp(propName) {
-                // 如果點擊的是已經啟用的道具，就取消它
                 if (activeProp === propName) {
                     activeProp = null;
                     propButtons[propName].classList.remove('prop-active');
                     grid.style.cursor = 'default';
                 } else {
-                    // 先取消其他所有的道具
                     Object.values(propButtons).forEach(btn => btn.classList.remove('prop-active'));
-                    // 啟用新道具
                     activeProp = propName;
                     propButtons[propName].classList.add('prop-active');
                     grid.style.cursor = 'crosshair';
@@ -169,7 +159,6 @@
             propButtons['wrapped'].addEventListener('click', () => toggleProp('wrapped'));
             propButtons['color'].addEventListener('click', () => toggleProp('color'));
 
-            // 洗牌道具 (獨立運作，不需要點擊糖果)
             document.getElementById('shuffle-btn').addEventListener('click', () => {
                 let currentColors = squares.map(sq => sq.style.backgroundColor);
                 currentColors.sort(() => Math.random() - 0.5);
@@ -179,7 +168,7 @@
                 grid.style.cursor = 'default';
             });
 
-            // 1. 建立遊戲棋盤
+            // 建立棋盤
             function createBoard() {
                 for (let i = 0; i < width * width; i++) {
                     const square = document.createElement('div');
@@ -188,9 +177,8 @@
                     let randomColor = Math.floor(Math.random() * candyColors.length);
                     square.style.backgroundColor = candyColors[randomColor];
                     
-                    // 點擊事件：根據啟用的道具執行不同效果
                     square.addEventListener('click', function() {
-                        if (!activeProp) return; // 沒有啟用道具就不做事
+                        if (!activeProp) return; 
 
                         const id = parseInt(this.id);
                         const row = Math.floor(id / width);
@@ -202,7 +190,6 @@
                             score += 5;
                         } 
                         else if (activeProp === 'striped') {
-                            // 十字炸彈：消除整行與整列
                             squares.forEach((sq, index) => {
                                 if (Math.floor(index / width) === row || index % width === col) {
                                     sq.style.backgroundColor = '';
@@ -211,10 +198,8 @@
                             });
                         }
                         else if (activeProp === 'wrapped') {
-                            // 範圍炸彈：消除 3x3 九宮格
                             for (let r = row - 1; r <= row + 1; r++) {
                                 for (let c = col - 1; c <= col + 1; c++) {
-                                    // 確保不會越界 (牆壁防呆)
                                     if (r >= 0 && r < width && c >= 0 && c < width) {
                                         let targetId = r * width + c;
                                         squares[targetId].style.backgroundColor = '';
@@ -224,8 +209,7 @@
                             }
                         }
                         else if (activeProp === 'color') {
-                            // 彩色巧克力：消除畫面上所有同色糖果
-                            if (targetColor !== '') { // 點擊空白無效
+                            if (targetColor !== '') {
                                 squares.forEach(sq => {
                                     if (sq.style.backgroundColor === targetColor) {
                                         sq.style.backgroundColor = '';
@@ -235,7 +219,6 @@
                             }
                         }
 
-                        // 更新分數並重置道具狀態
                         scoreDisplay.innerHTML = score;
                         propButtons[activeProp].classList.remove('prop-active');
                         activeProp = null;
@@ -248,7 +231,7 @@
             }
             createBoard();
 
-            // === 拖曳與觸控邏輯 ===
+            // 拖曳與交換變數
             let colorBeingDragged, colorBeingReplaced;
             let squareIdBeingDragged, squareIdBeingReplaced;
 
@@ -310,23 +293,60 @@
                 colorBeingReplaced = squares[squareIdBeingReplaced].style.backgroundColor;
                 squares[squareIdBeingDragged].style.backgroundColor = colorBeingReplaced;
                 squares[squareIdBeingReplaced].style.backgroundColor = colorBeingDragged;
+                
                 validateMove();
             }
 
+            // 【新增】檢查盤面是否產生任何連線的函數
+            function isMatchFormed() {
+                // 檢查橫向
+                for (let i = 0; i < 62; i++) {
+                    let rowOfThree = [i, i + 1, i + 2];
+                    let decidedColor = squares[i].style.backgroundColor;
+                    if ([6, 7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55].includes(i)) continue;
+                    if (decidedColor !== '' && rowOfThree.every(index => squares[index].style.backgroundColor === decidedColor)) {
+                        return true;
+                    }
+                }
+                // 檢查直向
+                for (let i = 0; i < 48; i++) {
+                    let columnOfThree = [i, i + width, i + width * 2];
+                    let decidedColor = squares[i].style.backgroundColor;
+                    if (decidedColor !== '' && columnOfThree.every(index => squares[index].style.backgroundColor === decidedColor)) {
+                        return true;
+                    }
+                }
+                return false; // 都沒有連線就回傳 false
+            }
+
+            // 【修改】驗證移動邏輯
             function validateMove() {
                 let validMoves = [
                     squareIdBeingDragged - 1, squareIdBeingDragged - width,
                     squareIdBeingDragged + 1, squareIdBeingDragged + width
                 ];
-                if (squareIdBeingReplaced !== null && validMoves.includes(squareIdBeingReplaced)) {
-                    squareIdBeingReplaced = null;
-                } else if (squareIdBeingReplaced !== null) {
+                let isAdjacent = validMoves.includes(squareIdBeingReplaced);
+
+                if (squareIdBeingReplaced !== null && isAdjacent) {
+                    // 交換後，立刻用 isMatchFormed() 判定是否有消除
+                    let hasMatch = isMatchFormed();
+                    
+                    if (hasMatch) {
+                        // 有成功連線，放行
+                        squareIdBeingReplaced = null;
+                    } else {
+                        // 雖然在隔壁，但是沒有產生連線 -> 退回顏色！
+                        squares[squareIdBeingReplaced].style.backgroundColor = colorBeingReplaced;
+                        squares[squareIdBeingDragged].style.backgroundColor = colorBeingDragged;
+                    }
+                } else if (squareIdBeingReplaced !== null && !isAdjacent) {
+                    // 根本不相鄰（例如拖到太遠的格子） -> 退回顏色
                     squares[squareIdBeingReplaced].style.backgroundColor = colorBeingReplaced;
                     squares[squareIdBeingDragged].style.backgroundColor = colorBeingDragged;
                 }
             }
 
-            // === 消除與掉落邏輯 ===
+            // 消除與掉落邏輯
             function checkRowForThree() {
                 for (let i = 0; i < 62; i++) {
                     let rowOfThree = [i, i + 1, i + 2];
