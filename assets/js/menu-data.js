@@ -34,7 +34,7 @@ const menuData = [
       },
       {
         text: 'candy crush',
-        link: 'games/candy crush.html'
+        link: 'games/candy_crush.html'
       }
     ]
   },
