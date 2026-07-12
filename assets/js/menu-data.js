@@ -22,7 +22,7 @@ const menuData = [
       },
       {
         text: 'running',
-        link: 'games/running.html'
+        link: 'games/Rhythm.html'
       },
       {
         text: 'cell',
