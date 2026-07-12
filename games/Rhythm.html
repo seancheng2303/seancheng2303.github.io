@@ -98,8 +98,11 @@
     const startScreen = document.getElementById('startScreen');
     const gameOverScreen = document.getElementById('gameOverScreen');
     
-    // ==== 關卡劇本設定 (核心更新) ====
-    // null 代表「休止符」，用來創造切分音與不同的節奏感
+    // ==== 載入玩家圖片 ====
+    const playerImg = new Image();
+    playerImg.src = '../assets/Rhythm/assassin.png';
+
+    // ==== 關卡劇本設定 ====
     const levelConfigs = {
         1: { 
             name: "LV1: 潛伏 (標準節奏)", speed: 3.5, interval: 1800,
@@ -112,12 +115,12 @@
             bass:   [196.00, null, 196.00, 174.61, 155.56, null, 155.56, 130.81] 
         },
         3: { 
-            name: "LV3: 重裝 (慢節拍, 敵人極快)", speed: 7.0, interval: 2200, // 音樂很慢，但敵人衝超快！
+            name: "LV3: 重裝 (慢節拍, 敵人極快)", speed: 7.0, interval: 2200, 
             melody: [196.00, null, null, 261.63, 196.00, null, null, 155.56],
-            bass:   [65.41, null, null, 87.31, 65.41, null, null, 49.00] // 超低音
+            bass:   [65.41, null, null, 87.31, 65.41, null, null, 49.00] 
         },
         4: { 
-            name: "LV4: 狂熱 (極速連打)", speed: 5.0, interval: 800, // 瘋狂連打
+            name: "LV4: 狂熱 (極速連打)", speed: 5.0, interval: 800, 
             melody: [523.25, 587.33, 659.25, 698.46, 783.99, 698.46, 659.25, 587.33],
             bass:   [130.81, 155.56, 174.61, 196.00, 261.63, 196.00, 174.61, 155.56] 
         }
@@ -131,7 +134,8 @@
     let enemies = []; let currentDevice = 'desktop';
     let enemySpeed = 3.5; let spawnIntervalTime = 1800;
     
-    const player = { x: 400, y: 200, size: 40, color: '#00d2ff', attackTimer: 0, attackSide: null };
+    // 新增 facing 屬性來記錄面朝方向
+    const player = { x: 400, y: 200, size: 60, attackTimer: 0, attackSide: null, facing: 'right' };
     const hitZoneLeft = { x: 260, width: 90 }; const hitZoneRight = { x: 450, width: 90 };
     const enemySize = 30;
     let gameInterval, musicInterval, animationId;
@@ -166,7 +170,6 @@
         const t = audioCtx.currentTime;
         const step = noteStep % 8;
 
-        // 檢查是否有音符 (不是 null 才會發聲，創造節奏變化)
         if (currentMelody[step]) {
             const melOsc = audioCtx.createOscillator(); const melGain = audioCtx.createGain();
             melOsc.type = 'square'; melOsc.frequency.setValueAtTime(currentMelody[step], t);
@@ -183,8 +186,7 @@
             bassOsc.start(t); bassOsc.stop(t + 0.3);
         }
 
-        // 大鼓 (只在特定節拍打擊)
-        if (step % 2 === 0 || (level % 4 === 2 && step === 3)) { // 讓輕快的關卡大鼓更活潑
+        if (step % 2 === 0 || (level % 4 === 2 && step === 3)) { 
             const kickOsc = audioCtx.createOscillator(); const kickGain = audioCtx.createGain();
             kickOsc.frequency.setValueAtTime(150, t); kickOsc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
             kickGain.gain.setValueAtTime(0.5, t); kickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
@@ -197,24 +199,19 @@
     // ==== 關卡與遊戲邏輯 ====
     function applyLevel(lv) {
         levelBoard.innerText = `LV: ${lv}`;
-        
-        // 使用 1~4 的劇本循環，每循環一次整體難度往上疊加
         let cycleLv = ((lv - 1) % 4) + 1; 
         let loopCount = Math.floor((lv - 1) / 4); 
         let config = levelConfigs[cycleLv];
 
-        // 套用劇本並計算輪迴難度加成
         enemySpeed = config.speed + (loopCount * 1.5); 
         spawnIntervalTime = Math.max(500, config.interval - (loopCount * 200)); 
         currentMelody = config.melody;
         currentBass = config.bass;
 
-        // UI 提示
         levelDesc.innerText = config.name + (loopCount > 0 ? ` (難度 +${loopCount})` : "");
         levelUpText.style.opacity = 1;
         setTimeout(() => { levelUpText.style.opacity = 0; }, 1500);
 
-        // 重啟音樂與生成計時器
         clearInterval(gameInterval); clearInterval(musicInterval);
         gameInterval = setInterval(spawnEnemy, spawnIntervalTime);
         musicInterval = setInterval(playMusicBeat, spawnIntervalTime / 4);
@@ -228,7 +225,10 @@
 
     function triggerAttack(side) {
         if (isGameOver) return;
-        player.attackTimer = 15; player.attackSide = side; playSound('swing');
+        player.attackTimer = 15; 
+        player.attackSide = side; 
+        player.facing = side; // 更新角色面朝方向
+        playSound('swing');
 
         let hit = false;
         for (let i = 0; i < enemies.length; i++) {
@@ -241,7 +241,6 @@
         if (hit) {
             score += 10; kills++; playSound('hit');
             ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            // 為了讓玩家更快體驗音樂變化，每 10 殺升級一次
             if (kills > 0 && kills % 10 === 0) { level++; applyLevel(level); }
         }
         scoreBoard.innerText = `SCORE: ${score}`;
@@ -278,6 +277,7 @@
         ctx.fillRect(hitZoneLeft.x, player.y - 30, hitZoneLeft.width, 60);
         ctx.fillRect(hitZoneRight.x, player.y - 30, hitZoneRight.width, 60);
 
+        // 畫出拔刀動畫
         if (player.attackTimer > 0) {
             ctx.save(); ctx.translate(player.x, player.y);
             if (player.attackSide === 'left') ctx.scale(-1, 1); 
@@ -289,8 +289,23 @@
             ctx.restore(); player.attackTimer--; 
         }
 
-        ctx.fillStyle = player.color;
-        ctx.fillRect(player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
+        // 畫出刺客圖片 (取代原本的藍色方塊)
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        // 如果面朝左，就水平翻轉畫布
+        if (player.facing === 'left') {
+            ctx.scale(-1, 1);
+        }
+        
+        // 確保圖片已經載入才畫出來
+        if (playerImg.complete) {
+            ctx.drawImage(playerImg, -player.size / 2, -player.size / 2, player.size, player.size);
+        } else {
+            // 圖片還沒載入時的備用方塊
+            ctx.fillStyle = '#00d2ff';
+            ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
+        }
+        ctx.restore();
 
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i]; e.x += e.direction * enemySpeed;
@@ -311,10 +326,11 @@
         if (deviceType === 'mobile' || deviceType === 'tablet') document.getElementById('touchControls').style.display = 'flex';
 
         score = 0; level = 1; kills = 0; hp = 3; isGameOver = false; noteStep = 0; enemies = [];
+        player.facing = 'right'; // 重置面朝方向
         scoreBoard.innerText = `SCORE: ${score}`; updateHP();
         cancelAnimationFrame(animationId);
         
-        applyLevel(1); // 直接套用第一關的劇本開始遊戲！
+        applyLevel(1); 
         gameLoop(); 
     }
     function restartGame() { startGame(currentDevice); }
