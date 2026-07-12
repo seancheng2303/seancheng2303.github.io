@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>簡易版 Candy Crush</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #fce4ec;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .score-board {
+            font-size: 24px;
+            font-weight: bold;
+            margin-bottom: 20px;
+            color: #d81b60;
+        }
+
+        .grid {
+            display: flex;
+            flex-wrap: wrap;
+            width: 400px; /* 8格 * 50px */
+            height: 400px;
+            background-color: #rgba(255, 255, 255, 0.5);
+            border: 4px solid #f06292;
+            border-radius: 10px;
+            padding: 5px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+
+        .grid div {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            cursor: pointer;
+            box-sizing: border-box;
+            border: 2px solid transparent;
+            transition: transform 0.1s;
+        }
+
+        .grid div:hover {
+            transform: scale(1.1);
+            border-color: rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <div class="score-board">分數: <span id="score">0</span></div>
+        <div class="grid"></div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const grid = document.querySelector('.grid');
+            const scoreDisplay = document.getElementById('score');
+            const width = 8;
+            const squares = [];
+            let score = 0;
+
+            // 定義糖果顏色
+            const candyColors = [
+                '#ef5350', // 紅
+                '#ffee58', // 黃
+                '#ffa726', // 橘
+                '#ab47bc', // 紫
+                '#66bb6a', // 綠
+                '#29b6f6'  // 藍
+            ];
+
+            // 1. 建立遊戲棋盤
+            function createBoard() {
+                for (let i = 0; i < width * width; i++) {
+                    const square = document.createElement('div');
+                    square.setAttribute('draggable', true);
+                    square.setAttribute('id', i);
+                    let randomColor = Math.floor(Math.random() * candyColors.length);
+                    square.style.backgroundColor = candyColors[randomColor];
+                    grid.appendChild(square);
+                    squares.push(square);
+                }
+            }
+            createBoard();
+
+            // 拖曳相關變數
+            let colorBeingDragged;
+            let colorBeingReplaced;
+            let squareIdBeingDragged;
+            let squareIdBeingReplaced;
+
+            // 2. 綁定拖曳事件
+            squares.forEach(square => square.addEventListener('dragstart', dragStart));
+            squares.forEach(square => square.addEventListener('dragend', dragEnd));
+            squares.forEach(square => square.addEventListener('dragover', dragOver));
+            squares.forEach(square => square.addEventListener('dragenter', dragEnter));
+            squares.forEach(square => square.addEventListener('dragleave', dragLeave));
+            squares.forEach(square => square.addEventListener('drop', dragDrop));
+
+            function dragStart() {
+                colorBeingDragged = this.style.backgroundColor;
+                squareIdBeingDragged = parseInt(this.id);
+            }
+
+            function dragOver(e) { e.preventDefault(); }
+            function dragEnter(e) { e.preventDefault(); }
+            function dragLeave() { this.style.backgroundColor = ''; }
+
+            function dragDrop() {
+                colorBeingReplaced = this.style.backgroundColor;
+                squareIdBeingReplaced = parseInt(this.id);
+                // 交換顏色
+                squares[squareIdBeingDragged].style.backgroundColor = colorBeingReplaced;
+                squares[squareIdBeingReplaced].style.backgroundColor = colorBeingDragged;
+            }
+
+            function dragEnd() {
+                // 限制只能與上下左右相鄰的格子交換
+                let validMoves = [
+                    squareIdBeingDragged - 1,
+                    squareIdBeingDragged - width,
+                    squareIdBeingDragged + 1,
+                    squareIdBeingDragged + width
+                ];
+                let validMove = validMoves.includes(squareIdBeingReplaced);
+
+                if (squareIdBeingReplaced && validMove) {
+                    squareIdBeingReplaced = null;
+                } else if (squareIdBeingReplaced && !validMove) {
+                    // 如果不是有效移動，換回來
+                    squares[squareIdBeingReplaced].style.backgroundColor = colorBeingReplaced;
+                    squares[squareIdBeingDragged].style.backgroundColor = colorBeingDragged;
+                } else {
+                    squares[squareIdBeingDragged].style.backgroundColor = colorBeingDragged;
+                }
+            }
+
+            // 3. 檢查消除邏輯
+            // 檢查橫向 3 個連線
+            function checkRowForThree() {
+                for (i = 0; i < 61; i++) {
+                    let rowOfThree = [i, i + 1, i + 2];
+                    let decidedColor = squares[i].style.backgroundColor;
+                    const isBlank = squares[i].style.backgroundColor === '';
+                    
+                    // 避免跨列連線
+                    const notValid = [6, 7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55];
+                    if (notValid.includes(i)) continue;
+
+                    if (rowOfThree.every(index => squares[index].style.backgroundColor === decidedColor && !isBlank)) {
+                        score += 3;
+                        scoreDisplay.innerHTML = score;
+                        rowOfThree.forEach(index => {
+                            squares[index].style.backgroundColor = '';
+                        });
+                    }
+                }
+            }
+
+            // 檢查直向 3 個連線
+            function checkColumnForThree() {
+                for (i = 0; i < 47; i++) {
+                    let columnOfThree = [i, i + width, i + width * 2];
+                    let decidedColor = squares[i].style.backgroundColor;
+                    const isBlank = squares[i].style.backgroundColor === '';
+
+                    if (columnOfThree.every(index => squares[index].style.backgroundColor === decidedColor && !isBlank)) {
+                        score += 3;
+                        scoreDisplay.innerHTML = score;
+                        columnOfThree.forEach(index => {
+                            squares[index].style.backgroundColor = '';
+                        });
+                    }
+                }
+            }
+
+            // 4. 讓糖果掉落補充空位
+            function moveDown() {
+                for (i = 0; i < 55; i++) {
+                    if (squares[i + width].style.backgroundColor === '') {
+                        squares[i + width].style.backgroundColor = squares[i].style.backgroundColor;
+                        squares[i].style.backgroundColor = '';
+                    }
+                    // 如果最上面那一排有空格，隨機生成新糖果
+                    const firstRow = [0, 1, 2, 3, 4, 5, 6, 7];
+                    const isFirstRow = firstRow.includes(i);
+                    if (isFirstRow && squares[i].style.backgroundColor === '') {
+                        let randomColor = Math.floor(Math.random() * candyColors.length);
+                        squares[i].style.backgroundColor = candyColors[randomColor];
+                    }
+                }
+            }
+
+            // 遊戲主迴圈
+            window.setInterval(function() {
+                checkRowForThree();
+                checkColumnForThree();
+                moveDown();
+            }, 100);
+        });
+    </script>
+</body>
+</html>
