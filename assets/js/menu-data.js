@@ -21,7 +21,7 @@ const menuData = [
         link: 'games/OOXX.html'
       },
       {
-        text: 'running',
+        text: 'Rhythm',
         link: 'games/Rhythm.html'
       },
       {
