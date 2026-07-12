@@ -3,337 +3,397 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>節奏刺客：一閃</title>
+    <title>Candy Crush (8-bit 音樂音效版)</title>
     <style>
         body {
-            margin: 0; display: flex; justify-content: center; align-items: center;
-            height: 100vh; background-color: #222; color: white;
-            font-family: 'Courier New', Courier, monospace; overflow: hidden;
-        }
-        .overlay {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column;
-            justify-content: center; align-items: center; z-index: 100;
-        }
-        .device-btn {
-            background-color: #00d2ff; color: #111; border: none; padding: 15px 40px;
-            margin: 10px; font-size: 20px; font-weight: bold; border-radius: 8px;
-            cursor: pointer; transition: 0.2s;
-        }
-        .device-btn:hover { background-color: #00a0cc; transform: scale(1.05); }
-        .danger-btn { background-color: #ff003c; }
-        .danger-btn:hover { background-color: #cc0030; }
-
-        #gameOverScreen { display: none; z-index: 150; }
-
-        canvas {
-            background-color: #111; border: 2px solid #555;
-            box-shadow: 0 0 30px rgba(0, 210, 255, 0.2); max-width: 100%;
-        }
-        #ui {
-            position: absolute; top: 20px; text-align: center; z-index: 10;
-            width: 100%; display: flex; justify-content: space-around;
-            pointer-events: none; align-items: center;
-        }
-        h1, h2, h3 { margin: 0; text-shadow: 2px 2px 4px #000; }
-        #hpBoard { color: #ff3366; font-size: 28px; letter-spacing: 5px; }
-        
-        #levelUpText {
-            position: absolute; top: 35%; font-size: 40px; color: #ffeb3b;
-            text-shadow: 0 0 20px #ff9800; opacity: 0; transition: opacity 0.5s;
-            pointer-events: none; z-index: 50; text-align: center;
+            display: flex; justify-content: center; align-items: center;
+            height: 100vh; margin: 0; background-color: #2c3e50;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overscroll-behavior: none; color: white;
         }
 
-        #touchControls {
-            display: none; position: absolute; bottom: 30px; width: 100%;
-            justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 20;
+        .game-container { display: flex; flex-direction: column; align-items: center; }
+
+        .header-panel {
+            display: flex; justify-content: space-between; align-items: center;
+            width: 400px; margin-bottom: 15px;
         }
-        .touch-btn {
-            background-color: rgba(255, 255, 255, 0.1); border: 2px solid rgba(0, 210, 255, 0.5);
-            color: #00d2ff; font-size: 24px; font-weight: bold; width: 100px; height: 100px;
-            border-radius: 50%; user-select: none;
+
+        .score-board { font-size: 24px; font-weight: bold; color: #f1c40f; }
+
+        .music-btn {
+            background-color: #34495e; color: white; border: 2px solid #f1c40f;
+            border-radius: 8px; padding: 6px 12px; font-size: 14px;
+            cursor: pointer; font-weight: bold; transition: all 0.2s;
         }
-        .touch-btn:active { background-color: rgba(0, 210, 255, 0.4); }
+        .music-btn:active { transform: scale(0.95); }
+        .music-on { background-color: #f1c40f; color: #2c3e50; }
+
+        .grid {
+            display: flex; flex-wrap: wrap;
+            width: 400px; height: 400px;
+            background-color: rgba(0, 0, 0, 0.3);
+            border: 4px solid #34495e; border-radius: 10px;
+            padding: 5px; box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        .grid div {
+            width: 50px; height: 50px; border-radius: 50%;
+            cursor: pointer; box-sizing: border-box;
+            border: 2px solid transparent; transition: transform 0.1s;
+            touch-action: none; user-select: none; -webkit-user-select: none;
+            display: flex; justify-content: center; align-items: center;
+            font-size: 24px;
+        }
+
+        .grid div:hover { transform: scale(1.1); border-color: rgba(255,255,255,0.3); }
+
+        .type-striped::after { content: "🚀"; }
+        .type-wrapped::after { content: "💣"; }
+        .type-color_bomb { background-color: #333 !important; }
+        .type-color_bomb::after { content: "🌈"; }
+
+        @media (max-width: 450px) {
+            .header-panel { width: 320px; }
+            .grid { width: 320px; height: 320px; }
+            .grid div { width: 40px; height: 40px; font-size: 18px; }
+        }
     </style>
 </head>
 <body>
 
-    <div id="startScreen" class="overlay">
-        <h1 style="font-size: 40px; margin-bottom: 20px; color: #00d2ff;">節奏刺客：一閃</h1>
-        <p>請調高音量，體驗動態關卡配樂：</p>
-        <button class="device-btn" onclick="startGame('mobile')">📱 手機</button>
-        <button class="device-btn" onclick="startGame('tablet')">💊 平板</button>
-        <button class="device-btn" onclick="startGame('desktop')">💻 電腦</button>
+    <audio id="bg-music" loop>
+        <source src="bgm.mp3" type="audio/mpeg">
+    </audio>
+
+    <div class="game-container">
+        <div class="header-panel">
+            <div class="score-board">分數: <span id="score">0</span></div>
+            <button id="music-toggle" class="music-btn">🎵 音樂: 關</button>
+        </div>
+        <div class="grid" id="game-grid"></div>
     </div>
 
-    <div id="gameOverScreen" class="overlay">
-        <h1 style="font-size: 50px; color: #ff003c; margin-bottom: 10px;">GAME OVER</h1>
-        <h2 id="finalScore" style="margin-bottom: 30px;">最終分數: 0</h2>
-        <button class="device-btn danger-btn" onclick="restartGame()">🔄 重新挑戰</button>
-    </div>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const grid = document.querySelector('.grid');
+            const scoreDisplay = document.getElementById('score');
+            const width = 8;
+            const squares = [];
+            let score = 0;
+            const candyColors = ['#e74c3c', '#f1c40f', '#e67e22', '#9b59b6', '#2ecc71', '#3498db'];
 
-    <div id="ui">
-        <h2 id="levelBoard" style="color: #ffeb3b;">LV: 1</h2>
-        <h2 id="hpBoard">❤️❤️❤️</h2>
-        <h2 id="scoreBoard">SCORE: 0</h2>
-    </div>
-    
-    <div id="levelUpText">LEVEL UP!<br><span id="levelDesc" style="font-size:24px; color:#fff;"></span></div>
+            // === 🎵 音樂與 Web Audio API 8-bit 音效系統 ===
+            const bgMusic = document.getElementById('bg-music');
+            const musicBtn = document.getElementById('music-toggle');
+            let isMusicPlaying = false;
 
-    <canvas id="gameCanvas" width="800" height="400"></canvas>
+            // 初始化 Web Audio API 引擎 (用來合成 8-bit 音效)
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            const audioCtx = new AudioContext();
 
-    <div id="touchControls">
-        <button class="touch-btn" id="btnLeft">左斬</button>
-        <button class="touch-btn" id="btnRight">右斬</button>
-    </div>
+            musicBtn.addEventListener('click', () => {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                
+                if (isMusicPlaying) {
+                    bgMusic.pause();
+                    musicBtn.textContent = '🎵 音樂: 關';
+                    musicBtn.classList.remove('music-on');
+                } else {
+                    bgMusic.play().catch(e => console.log("等待音樂載入或檔案不存在"));
+                    musicBtn.textContent = '🎵 音樂: 開';
+                    musicBtn.classList.add('music-on');
+                }
+                isMusicPlaying = !isMusicPlaying;
+            });
 
-<script>
-    const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
-    const scoreBoard = document.getElementById('scoreBoard');
-    const levelBoard = document.getElementById('levelBoard');
-    const hpBoard = document.getElementById('hpBoard');
-    const levelUpText = document.getElementById('levelUpText');
-    const levelDesc = document.getElementById('levelDesc');
-    const startScreen = document.getElementById('startScreen');
-    const gameOverScreen = document.getElementById('gameOverScreen');
-    
-    // ==== 載入玩家圖片 ====
-    const playerImg = new Image();
-    playerImg.src = '../assets/Rhythm/assassin.png';
-
-    // ==== 關卡劇本設定 ====
-    const levelConfigs = {
-        1: { 
-            name: "LV1: 潛伏 (標準節奏)", speed: 3.5, interval: 1800,
-            melody: [261.63, 311.13, 392.00, 311.13, 349.23, 466.16, 392.00, 523.25],
-            bass:   [130.81, 130.81, 130.81, 155.56, 174.61, 174.61, 196.00, 196.00] 
-        },
-        2: { 
-            name: "LV2: 突進 (輕快切分音)", speed: 4.5, interval: 1200,
-            melody: [392.00, null, 466.16, 523.25, 587.33, null, 523.25, 698.46],
-            bass:   [196.00, null, 196.00, 174.61, 155.56, null, 155.56, 130.81] 
-        },
-        3: { 
-            name: "LV3: 重裝 (慢節拍, 敵人極快)", speed: 7.0, interval: 2200, 
-            melody: [196.00, null, null, 261.63, 196.00, null, null, 155.56],
-            bass:   [65.41, null, null, 87.31, 65.41, null, null, 49.00] 
-        },
-        4: { 
-            name: "LV4: 狂熱 (極速連打)", speed: 5.0, interval: 800, 
-            melody: [523.25, 587.33, 659.25, 698.46, 783.99, 698.46, 659.25, 587.33],
-            bass:   [130.81, 155.56, 174.61, 196.00, 261.63, 196.00, 174.61, 155.56] 
-        }
-    };
-
-    let currentMelody = [];
-    let currentBass = [];
-    
-    // ==== 遊戲狀態變數 ====
-    let score = 0; let level = 1; let kills = 0; let hp = 3; let isGameOver = false;
-    let enemies = []; let currentDevice = 'desktop';
-    let enemySpeed = 3.5; let spawnIntervalTime = 1800;
-    
-    // 新增 facing 屬性來記錄面朝方向
-    const player = { x: 400, y: 200, size: 60, attackTimer: 0, attackSide: null, facing: 'right' };
-    const hitZoneLeft = { x: 260, width: 90 }; const hitZoneRight = { x: 450, width: 90 };
-    const enemySize = 30;
-    let gameInterval, musicInterval, animationId;
-    let noteStep = 0;
-
-    // ==== 音效系統 ====
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-
-    function playSound(type) {
-        if (audioCtx.state === 'suspended') return;
-        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
-        osc.connect(gain); gain.connect(audioCtx.destination);
-
-        if (type === 'swing') {
-            osc.type = 'triangle'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.4, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        } else if (type === 'hit') {
-            osc.type = 'square'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-        } else if (type === 'hurt') {
-            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        }
-        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
-    }
-
-    function playMusicBeat() {
-        if (audioCtx.state === 'suspended' || isGameOver) return;
-        
-        const t = audioCtx.currentTime;
-        const step = noteStep % 8;
-
-        if (currentMelody[step]) {
-            const melOsc = audioCtx.createOscillator(); const melGain = audioCtx.createGain();
-            melOsc.type = 'square'; melOsc.frequency.setValueAtTime(currentMelody[step], t);
-            melGain.gain.setValueAtTime(0.05, t); melGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-            melOsc.connect(melGain); melGain.connect(audioCtx.destination);
-            melOsc.start(t); melOsc.stop(t + 0.2);
-        }
-
-        if (currentBass[step]) {
-            const bassOsc = audioCtx.createOscillator(); const bassGain = audioCtx.createGain();
-            bassOsc.type = 'triangle'; bassOsc.frequency.setValueAtTime(currentBass[step], t);
-            bassGain.gain.setValueAtTime(0.2, t); bassGain.gain.linearRampToValueAtTime(0.01, t + 0.3);
-            bassOsc.connect(bassGain); bassGain.connect(audioCtx.destination);
-            bassOsc.start(t); bassOsc.stop(t + 0.3);
-        }
-
-        if (step % 2 === 0 || (level % 4 === 2 && step === 3)) { 
-            const kickOsc = audioCtx.createOscillator(); const kickGain = audioCtx.createGain();
-            kickOsc.frequency.setValueAtTime(150, t); kickOsc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
-            kickGain.gain.setValueAtTime(0.5, t); kickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
-            kickOsc.connect(kickGain); kickGain.connect(audioCtx.destination);
-            kickOsc.start(t); kickOsc.stop(t + 0.1);
-        }
-        noteStep++;
-    }
-
-    // ==== 關卡與遊戲邏輯 ====
-    function applyLevel(lv) {
-        levelBoard.innerText = `LV: ${lv}`;
-        let cycleLv = ((lv - 1) % 4) + 1; 
-        let loopCount = Math.floor((lv - 1) / 4); 
-        let config = levelConfigs[cycleLv];
-
-        enemySpeed = config.speed + (loopCount * 1.5); 
-        spawnIntervalTime = Math.max(500, config.interval - (loopCount * 200)); 
-        currentMelody = config.melody;
-        currentBass = config.bass;
-
-        levelDesc.innerText = config.name + (loopCount > 0 ? ` (難度 +${loopCount})` : "");
-        levelUpText.style.opacity = 1;
-        setTimeout(() => { levelUpText.style.opacity = 0; }, 1500);
-
-        clearInterval(gameInterval); clearInterval(musicInterval);
-        gameInterval = setInterval(spawnEnemy, spawnIntervalTime);
-        musicInterval = setInterval(playMusicBeat, spawnIntervalTime / 4);
-    }
-
-    function spawnEnemy() {
-        if (isGameOver) return;
-        const isLeft = Math.random() < 0.5;
-        enemies.push({ x: isLeft ? -enemySize : canvas.width + enemySize, y: 200 - enemySize / 2, direction: isLeft ? 1 : -1, side: isLeft ? 'left' : 'right' });
-    }
-
-    function triggerAttack(side) {
-        if (isGameOver) return;
-        player.attackTimer = 15; 
-        player.attackSide = side; 
-        player.facing = side; // 更新角色面朝方向
-        playSound('swing');
-
-        let hit = false;
-        for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i];
-            if (e.side === side && ((side === 'left' && e.x + enemySize > hitZoneLeft.x && e.x < hitZoneLeft.x + hitZoneLeft.width) || (side === 'right' && e.x < hitZoneRight.x + hitZoneRight.width && e.x + enemySize > hitZoneRight.x))) {
-                enemies.splice(i, 1); hit = true; break;
+            // 產生 8-bit 方波音效 (Square Wave)
+            function play8BitSound() {
+                if (!isMusicPlaying || audioCtx.state === 'suspended') return;
+                
+                const osc = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                
+                osc.type = 'square'; // 方波是 8-bit 聲音的靈魂
+                osc.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                
+                const now = audioCtx.currentTime;
+                // 快速的「叮」聲 (頻率從 600Hz 降到 400Hz)
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(400, now + 0.1);
+                
+                // 音量控制 (避免太大聲)
+                gainNode.gain.setValueAtTime(0.05, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+                
+                osc.start(now);
+                osc.stop(now + 0.1);
             }
-        }
 
-        if (hit) {
-            score += 10; kills++; playSound('hit');
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
-            if (kills > 0 && kills % 10 === 0) { level++; applyLevel(level); }
-        }
-        scoreBoard.innerText = `SCORE: ${score}`;
-    }
+            // ================= 遊戲核心邏輯 =================
 
-    function updateHP() {
-        hpBoard.innerText = '❤️'.repeat(hp) + '🖤'.repeat(3 - hp);
-        if (hp <= 0) {
-            isGameOver = true; clearInterval(gameInterval); clearInterval(musicInterval);
-            document.getElementById('finalScore').innerText = `最終分數: ${score}`;
-            gameOverScreen.style.display = 'flex';
-        }
-    }
-
-    // ==== 控制與主迴圈 ====
-    window.addEventListener('keydown', (e) => {
-        if (!isGameOver && startScreen.style.display === 'none') {
-            if (e.key === 'ArrowLeft') triggerAttack('left');
-            if (e.key === 'ArrowRight') triggerAttack('right');
-        }
-    });
-    
-    ['btnLeft', 'btnRight'].forEach(id => {
-        const btn = document.getElementById(id); const side = id === 'btnLeft' ? 'left' : 'right';
-        btn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerAttack(side); });
-        btn.addEventListener('mousedown', (e) => { e.preventDefault(); triggerAttack(side); });
-    });
-
-    function gameLoop() {
-        if (isGameOver) return;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        ctx.fillStyle = 'rgba(0, 255, 0, 0.15)';
-        ctx.fillRect(hitZoneLeft.x, player.y - 30, hitZoneLeft.width, 60);
-        ctx.fillRect(hitZoneRight.x, player.y - 30, hitZoneRight.width, 60);
-
-        // 畫出拔刀動畫
-        if (player.attackTimer > 0) {
-            ctx.save(); ctx.translate(player.x, player.y);
-            if (player.attackSide === 'left') ctx.scale(-1, 1); 
-            let progress = 1 - (player.attackTimer / 15);
-            ctx.rotate(-Math.PI / 3 + (progress * Math.PI / 1.5));
-            ctx.fillStyle = '#fff'; ctx.fillRect(15, -4, 60, 8);
-            ctx.beginPath(); ctx.arc(0, 0, 50, -Math.PI / 3, -Math.PI / 3 + (progress * Math.PI / 1.5));
-            ctx.strokeStyle = `rgba(0, 210, 255, ${1 - progress})`; ctx.lineWidth = 15; ctx.stroke();
-            ctx.restore(); player.attackTimer--; 
-        }
-
-        // 畫出刺客圖片 (取代原本的藍色方塊)
-        ctx.save();
-        ctx.translate(player.x, player.y);
-        // 如果面朝左，就水平翻轉畫布
-        if (player.facing === 'left') {
-            ctx.scale(-1, 1);
-        }
-        
-        // 確保圖片已經載入才畫出來
-        if (playerImg.complete) {
-            ctx.drawImage(playerImg, -player.size / 2, -player.size / 2, player.size, player.size);
-        } else {
-            // 圖片還沒載入時的備用方塊
-            ctx.fillStyle = '#00d2ff';
-            ctx.fillRect(-player.size / 2, -player.size / 2, player.size, player.size);
-        }
-        ctx.restore();
-
-        for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i]; e.x += e.direction * enemySpeed;
-            ctx.fillStyle = '#ff003c'; ctx.shadowBlur = 10; ctx.shadowColor = '#ff003c';
-            ctx.fillRect(e.x, e.y, enemySize, enemySize); ctx.shadowBlur = 0;
-
-            if ((e.side === 'left' && e.x > player.x) || (e.side === 'right' && e.x < player.x)) {
-                enemies.splice(i, 1); hp--; playSound('hurt'); updateHP();
-                ctx.fillStyle = 'rgba(255, 0, 60, 0.3)'; ctx.fillRect(0, 0, canvas.width, canvas.height); i--;
+            function createBoard() {
+                for (let i = 0; i < width * width; i++) {
+                    const square = document.createElement('div');
+                    square.setAttribute('draggable', true);
+                    square.setAttribute('id', i);
+                    square.dataset.type = 'normal';
+                    let randomColor = Math.floor(Math.random() * candyColors.length);
+                    square.style.backgroundColor = candyColors[randomColor];
+                    grid.appendChild(square);
+                    squares.push(square);
+                }
             }
-        }
-        animationId = requestAnimationFrame(gameLoop);
-    }
+            createBoard();
 
-    function startGame(deviceType) {
-        currentDevice = deviceType; startScreen.style.display = 'none'; gameOverScreen.style.display = 'none';
-        if (audioCtx.state === 'suspended') audioCtx.resume();
-        if (deviceType === 'mobile' || deviceType === 'tablet') document.getElementById('touchControls').style.display = 'flex';
+            let squareIdBeingDragged, squareIdBeingReplaced;
+            let lastActionTarget = null; 
 
-        score = 0; level = 1; kills = 0; hp = 3; isGameOver = false; noteStep = 0; enemies = [];
-        player.facing = 'right'; // 重置面朝方向
-        scoreBoard.innerText = `SCORE: ${score}`; updateHP();
-        cancelAnimationFrame(animationId);
-        
-        applyLevel(1); 
-        gameLoop(); 
-    }
-    function restartGame() { startGame(currentDevice); }
-</script>
+            squares.forEach(square => {
+                square.addEventListener('dragstart', dragStart);
+                square.addEventListener('dragend', dragEnd);
+                square.addEventListener('dragover', e => e.preventDefault());
+                square.addEventListener('dragenter', e => e.preventDefault());
+                square.addEventListener('drop', dragDrop);
+                square.addEventListener('touchstart', handleTouchStart, {passive: false});
+                square.addEventListener('touchend', handleTouchEnd);
+            });
+
+            let touchStartX = 0, touchStartY = 0;
+            function dragStart() { squareIdBeingDragged = parseInt(this.id); }
+            function dragDrop() { squareIdBeingReplaced = parseInt(this.id); }
+            function dragEnd() { validateMove(); }
+
+            function handleTouchStart(e) {
+                touchStartX = e.changedTouches[0].clientX;
+                touchStartY = e.changedTouches[0].clientY;
+                squareIdBeingDragged = parseInt(this.id);
+            }
+
+            function handleTouchEnd(e) {
+                if (squareIdBeingDragged === null) return;
+                let diffX = e.changedTouches[0].clientX - touchStartX;
+                let diffY = e.changedTouches[0].clientY - touchStartY;
+
+                if (Math.abs(diffX) < 20 && Math.abs(diffY) < 20) return;
+
+                if (Math.abs(diffX) > Math.abs(diffY)) {
+                    squareIdBeingReplaced = diffX > 0 ? squareIdBeingDragged + 1 : squareIdBeingDragged - 1; 
+                } else {
+                    squareIdBeingReplaced = diffY > 0 ? squareIdBeingDragged + width : squareIdBeingDragged - width; 
+                }
+
+                if ((squareIdBeingDragged % width === width - 1 && squareIdBeingReplaced === squareIdBeingDragged + 1) ||
+                    (squareIdBeingDragged % width === 0 && squareIdBeingReplaced === squareIdBeingDragged - 1) ||
+                    squareIdBeingReplaced < 0 || squareIdBeingReplaced >= width * width) return;
+
+                validateMove();
+            }
+
+            function swapSquares(id1, id2) {
+                let tempColor = squares[id1].style.backgroundColor;
+                let tempType = squares[id1].dataset.type;
+                let tempClass = squares[id1].className;
+
+                squares[id1].style.backgroundColor = squares[id2].style.backgroundColor;
+                squares[id1].dataset.type = squares[id2].dataset.type;
+                squares[id1].className = squares[id2].className;
+
+                squares[id2].style.backgroundColor = tempColor;
+                squares[id2].dataset.type = tempType;
+                squares[id2].className = tempClass;
+            }
+
+            function validateMove() {
+                let validMoves = [squareIdBeingDragged - 1, squareIdBeingDragged - width, squareIdBeingDragged + 1, squareIdBeingDragged + width];
+                if (!validMoves.includes(squareIdBeingReplaced)) return;
+
+                let draggedSq = squares[squareIdBeingDragged];
+                let replacedSq = squares[squareIdBeingReplaced];
+
+                swapSquares(squareIdBeingDragged, squareIdBeingReplaced);
+                lastActionTarget = squareIdBeingReplaced; 
+
+                if (draggedSq.dataset.type === 'color_bomb' || replacedSq.dataset.type === 'color_bomb') {
+                    handleColorBombInteraction(squareIdBeingDragged, squareIdBeingReplaced);
+                    squareIdBeingDragged = null; squareIdBeingReplaced = null;
+                    return;
+                }
+
+                if (!checkMatches()) {
+                    swapSquares(squareIdBeingDragged, squareIdBeingReplaced);
+                }
+                
+                squareIdBeingDragged = null; squareIdBeingReplaced = null;
+            }
+
+            function handleColorBombInteraction(id1, id2) {
+                let bombId = squares[id1].dataset.type === 'color_bomb' ? id1 : id2;
+                let targetId = bombId === id1 ? id2 : id1;
+                let targetColor = squares[targetId].style.backgroundColor;
+                let targetType = squares[targetId].dataset.type;
+
+                clearSquare(bombId);
+
+                if (targetType === 'normal') {
+                    squares.forEach((sq, i) => {
+                        if (sq.style.backgroundColor === targetColor && sq.dataset.type === 'normal') clearSquare(i);
+                    });
+                } else if (targetType !== 'color_bomb') {
+                    squares.forEach((sq, i) => {
+                        if (sq.style.backgroundColor === targetColor) {
+                            sq.dataset.type = targetType;
+                            sq.className = `type-${targetType}`;
+                            clearSquare(i); 
+                        }
+                    });
+                }
+            }
+
+            function clearSquare(index) {
+                let sq = squares[index];
+                if (sq.style.backgroundColor === '') return; 
+
+                let type = sq.dataset.type;
+                sq.style.backgroundColor = '';
+                sq.dataset.type = 'normal';
+                sq.className = '';
+                score += 5;
+                scoreDisplay.innerHTML = score;
+                
+                // 觸發消除音效
+                play8BitSound();
+
+                let row = Math.floor(index / width);
+                let col = index % width;
+
+                if (type === 'striped') {
+                    for (let i = 0; i < width; i++) {
+                        if (squares[row * width + i].style.backgroundColor !== '') clearSquare(row * width + i);
+                        if (squares[i * width + col].style.backgroundColor !== '') clearSquare(i * width + col);
+                    }
+                } else if (type === 'wrapped') {
+                    for (let r = row - 1; r <= row + 2; r++) {
+                        for (let c = col - 1; c <= col + 2; c++) {
+                            if (r >= 0 && r < width && c >= 0 && c < width) {
+                                let targetId = r * width + c;
+                                if (squares[targetId].style.backgroundColor !== '') clearSquare(targetId);
+                            }
+                        }
+                    }
+                }
+            }
+
+            function checkMatches() {
+                let matchedGroups = [];
+                let hasMatch = false;
+
+                for (let r = 0; r < width; r++) {
+                    let matchLength = 1;
+                    for (let c = 0; c < width; c++) {
+                        let i = r * width + c;
+                        let color = squares[i].style.backgroundColor;
+                        if (c < width - 1 && color !== '' && color === squares[i+1].style.backgroundColor) {
+                            matchLength++;
+                        } else {
+                            if (matchLength >= 3) {
+                                let group = [];
+                                for (let k = 0; k < matchLength; k++) group.push(i - k);
+                                matchedGroups.push({ indices: group, color: color, type: 'horizontal' });
+                                hasMatch = true;
+                            }
+                            matchLength = 1;
+                        }
+                    }
+                }
+
+                for (let c = 0; c < width; c++) {
+                    let matchLength = 1;
+                    for (let r = 0; r < width; r++) {
+                        let i = r * width + c;
+                        let color = squares[i].style.backgroundColor;
+                        if (r < width - 1 && color !== '' && color === squares[i+width].style.backgroundColor) {
+                            matchLength++;
+                        } else {
+                            if (matchLength >= 3) {
+                                let group = [];
+                                for (let k = 0; k < matchLength; k++) group.push(i - k * width);
+                                matchedGroups.push({ indices: group, color: color, type: 'vertical' });
+                                hasMatch = true;
+                            }
+                            matchLength = 1;
+                        }
+                    }
+                }
+
+                if (!hasMatch) return false;
+
+                let toClear = new Set();
+                let spawnList = [];
+
+                matchedGroups.forEach(group => {
+                    let len = group.indices.length;
+                    let intersection = null;
+                    matchedGroups.forEach(otherGroup => {
+                        if (group !== otherGroup && group.color === otherGroup.color) {
+                            let shared = group.indices.filter(idx => otherGroup.indices.includes(idx));
+                            if (shared.length > 0) intersection = shared[0];
+                        }
+                    });
+
+                    let spawnIndex = group.indices.includes(lastActionTarget) ? lastActionTarget : group.indices[1];
+
+                    if (len >= 5) {
+                        spawnList.push({ index: spawnIndex, type: 'color_bomb', color: group.color });
+                    } else if (intersection !== null) {
+                        spawnList.push({ index: intersection, type: 'wrapped', color: group.color });
+                    } else if (len === 4) {
+                        spawnList.push({ index: spawnIndex, type: 'striped', color: group.color });
+                    }
+
+                    group.indices.forEach(idx => toClear.add(idx));
+                });
+
+                toClear.forEach(idx => clearSquare(idx));
+
+                spawnList.forEach(spawn => {
+                    if (squares[spawn.index].dataset.type === 'normal') {
+                        squares[spawn.index].dataset.type = spawn.type;
+                        squares[spawn.index].className = `type-${spawn.type}`;
+                        if (spawn.type !== 'color_bomb') squares[spawn.index].style.backgroundColor = spawn.color;
+                        else squares[spawn.index].style.backgroundColor = 'transparent';
+                    }
+                });
+
+                lastActionTarget = null;
+                return true;
+            }
+
+            function moveDown() {
+                for (let i = 0; i < 56; i++) {
+                    if (squares[i + width].style.backgroundColor === '') {
+                        squares[i + width].style.backgroundColor = squares[i].style.backgroundColor;
+                        squares[i + width].dataset.type = squares[i].dataset.type;
+                        squares[i + width].className = squares[i].className;
+                        
+                        squares[i].style.backgroundColor = '';
+                        squares[i].dataset.type = 'normal';
+                        squares[i].className = '';
+                    }
+                    if (i < 8 && squares[i].style.backgroundColor === '') {
+                        squares[i].style.backgroundColor = candyColors[Math.floor(Math.random() * candyColors.length)];
+                        squares[i].dataset.type = 'normal';
+                        squares[i].className = '';
+                    }
+                }
+            }
+
+            window.setInterval(function() {
+                checkMatches();
+                moveDown();
+            }, 150);
+        });
+    </script>
 </body>
 </html>
