@@ -1,221 +1,287 @@
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
-import java.util.ArrayList;
-import java.util.Iterator;
-
-public class BattleDogsGameV2 extends JPanel implements Runnable {
-    private final int WIDTH = 800;
-    private final int HEIGHT = 400;
-    
-    private int money = 0;
-    private final int moneyCap = 2000; // 提升金錢上限
-    private int playerBaseHp = 2000;
-    private int enemyBaseHp = 3000;
-    
-    private ArrayList<Unit> playerUnits = new ArrayList<>();
-    private ArrayList<Unit> enemyUnits = new ArrayList<>();
-    
-    private Thread gameThread;
-    private boolean isRunning = false;
-    private int frameCount = 0;
-
-    // 單位冷卻時間計時器 (0表示可召喚)
-    private int[] cooldowns = {0, 0, 0, 0}; 
-    // 各單位的最大冷卻時間 (Frames: 30 frames 約 1 秒)
-    private final int[] maxCooldowns = {30, 90, 150, 450}; 
-
-    public BattleDogsGameV2() {
-        setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        setBackground(Color.LIGHT_GRAY);
-        setFocusable(true);
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狗狗大戰爭 (Battle Dogs) - Prototype</title>
+    <style>
+        body { margin: 0; padding: 20px; background-color: #f0f0f0; font-family: sans-serif; text-align: center; }
+        #game-container { position: relative; width: 800px; height: 400px; margin: 0 auto; border: 2px solid #333; background-color: #87CEEB; overflow: hidden; }
+        canvas { display: block; }
+        .ui-bar { width: 800px; margin: 10px auto; display: flex; justify-content: space-between; align-items: center; }
+        button { padding: 10px 15px; font-size: 16px; cursor: pointer; border: 2px solid #333; border-radius: 5px; background-color: #fff; font-weight: bold; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #wallet-info { font-size: 18px; font-weight: bold; background: #FFD700; padding: 5px 15px; border-radius: 20px; border: 2px solid #B8860B; }
         
-        addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyPressed(KeyEvent e) {
-                // 1. 砲灰狗 (Cost: 50)
-                if (e.getKeyCode() == KeyEvent.VK_1 && money >= 50 && cooldowns[0] == 0) {
-                    money -= 50;
-                    cooldowns[0] = maxCooldowns[0];
-                    playerUnits.add(new Unit("砲灰狗", 100, 300, 2, 100, 10, 30, Color.CYAN, true));
-                }
-                // 2. 牆壁狗 (Cost: 150)
-                else if (e.getKeyCode() == KeyEvent.VK_2 && money >= 150 && cooldowns[1] == 0) {
-                    money -= 150;
-                    cooldowns[1] = maxCooldowns[1];
-                    playerUnits.add(new Unit("牆壁狗", 100, 300, 1, 400, 8, 30, Color.BLUE, true));
-                }
-                // 3. 長腿狗 (Cost: 300)
-                else if (e.getKeyCode() == KeyEvent.VK_3 && money >= 300 && cooldowns[2] == 0) {
-                    money -= 300;
-                    cooldowns[2] = maxCooldowns[2];
-                    playerUnits.add(new Unit("長腿狗", 100, 300, 2, 150, 40, 120, Color.ORANGE, true));
-                }
-                // 4. 巨神狗 (Cost: 1000)
-                else if (e.getKeyCode() == KeyEvent.VK_4 && money >= 1000 && cooldowns[3] == 0) {
-                    money -= 1000;
-                    cooldowns[3] = maxCooldowns[3];
-                    playerUnits.add(new Unit("巨神狗", 100, 280, 1, 1500, 150, 40, Color.DARK_GRAY, true));
-                }
-            }
-        });
-    }
-
-    public void startGame() {
-        isRunning = true;
-        gameThread = new Thread(this);
-        gameThread.start();
-    }
-
-    @Override
-    public void run() {
-        while (isRunning) {
-            update();
-            repaint();
-            try { Thread.sleep(30); } catch (InterruptedException e) { e.printStackTrace(); }
+        /* 動畫特效 */
+        @keyframes laser-fire {
+            0% { background-color: rgba(255, 0, 0, 0); }
+            50% { background-color: rgba(255, 255, 0, 0.8); }
+            100% { background-color: rgba(255, 0, 0, 0); }
         }
-    }
+        .laser-active { animation: laser-fire 0.5s ease-out; }
+    </style>
+</head>
+<body>
 
-    private void update() {
-        frameCount++;
-        
-        // 金錢增加 (稍微加快)
-        if (frameCount % 3 == 0 && money < moneyCap) money += 2;
-        
-        // 更新冷卻時間
-        for (int i = 0; i < cooldowns.length; i++) {
-            if (cooldowns[i] > 0) cooldowns[i]--;
+    <h1>🐾 狗狗大戰爭 - 核心戰鬥測試 🐾</h1>
+    
+    <div class="ui-bar">
+        <div id="wallet-info">💰 0 / 100 (Lv.1)</div>
+        <button id="btn-upgrade-wallet">🔼 升級錢包 (Cost: 150)</button>
+    </div>
+
+    <div id="game-container">
+        <canvas id="gameCanvas" width="800" height="400"></canvas>
+    </div>
+
+    <div class="ui-bar" style="justify-content: flex-start; gap: 10px;">
+        <button id="btn-spawn-doge">🐶 砲灰狗 ($50)</button>
+        <button id="btn-spawn-sniper">🐕 狙擊狗 ($200)</button>
+        <button id="btn-spawn-titan">🦍 巨神狗 ($500)</button>
+        <div style="flex-grow: 1;"></div>
+        <button id="btn-laser" style="background-color: #ff4c4c; color: white;">⚡ 雷射砲 (0%)</button>
+    </div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    // === 遊戲系統狀態 ===
+    const game = {
+        money: 0,
+        maxMoney: 100,
+        walletLevel: 1,
+        moneyRate: 0.5, // 每幀增加的錢
+        laserCharge: 0,
+        laserMax: 1000,
+        isGameOver: false
+    };
+
+    const units = []; // 場上所有單位
+    let lastTime = 0;
+
+    // === 基地設定 ===
+    const bases = {
+        player: { x: 50, y: 300, hp: 1000, maxHp: 1000, width: 60, height: 80, color: 'blue', isPlayer: true },
+        enemy:  { x: 700, y: 300, hp: 1500, maxHp: 1500, width: 60, height: 80, color: 'darkred', isPlayer: false }
+    };
+
+    // === 角色圖鑑資料 ===
+    const UNIT_DATA = {
+        doge:   { cost: 50, hp: 100, atk: 15, range: 30, speed: 1.5, cd: 2000, color: 'lightblue', width: 20, height: 20 },
+        sniper: { cost: 200, hp: 150, atk: 40, range: 150, speed: 1.0, cd: 5000, color: 'teal', width: 25, height: 30 },
+        titan:  { cost: 500, hp: 800, atk: 100, range: 40, speed: 0.6, cd: 15000, color: 'navy', width: 40, height: 50 },
+        // 敵軍
+        enemy1: { hp: 120, atk: 10, range: 30, speed: -0.8, color: 'red', width: 25, height: 25 },
+        enemyBoss:{ hp: 1000, atk: 50, range: 40, speed: -0.4, color: 'purple', width: 50, height: 60 }
+    };
+
+    // === 實體類別 ===
+    class Unit {
+        constructor(x, y, data, isPlayer) {
+            this.x = x;
+            this.y = y - data.height;
+            this.hp = data.hp;
+            this.maxHp = data.hp;
+            this.atk = data.atk;
+            this.range = data.range;
+            this.speed = data.speed;
+            this.width = data.width;
+            this.height = data.height;
+            this.color = data.color;
+            this.isPlayer = isPlayer;
+            this.actionTimer = 0;
+            this.state = 'move'; // move 或 attack
         }
 
-        // 敵方 AI 自動出兵 (加入兩種敵人)
-        if (frameCount % 80 == 0) {
-            if (Math.random() > 0.8) {
-                // 強力猩猩敵軍
-                enemyUnits.add(new Unit("野猩猩", 700, 290, -1, 600, 50, 30, Color.RED, false)); 
+        draw(ctx) {
+            ctx.fillStyle = this.color;
+            ctx.fillRect(this.x, this.y, this.width, this.height);
+            // 血條
+            ctx.fillStyle = 'red';
+            ctx.fillRect(this.x, this.y - 10, this.width, 5);
+            ctx.fillStyle = 'lightgreen';
+            ctx.fillRect(this.x, this.y - 10, this.width * (this.hp / this.maxHp), 5);
+        }
+
+        update(deltaTime) {
+            if (this.hp <= 0) return;
+
+            // 尋找目標
+            let target = this.findTarget();
+
+            if (target) {
+                // 進入攻擊狀態
+                this.state = 'attack';
+                this.actionTimer += deltaTime;
+                if (this.actionTimer >= 1000) { // 每秒攻擊一次
+                    target.hp -= this.atk;
+                    this.actionTimer = 0;
+                }
             } else {
-                // 普通小怪
-                enemyUnits.add(new Unit("雜兵喵", 700, 300, -2, 100, 15, 30, Color.MAGENTA, false)); 
+                // 移動
+                this.state = 'move';
+                this.x += this.speed;
+                this.actionTimer = 0; // 重置攻擊計時
             }
         }
 
-        processUnits(playerUnits, enemyUnits, 700, enemyBaseHp, false);
-        processUnits(enemyUnits, playerUnits, 100, playerBaseHp, true);
-        
-        if (playerBaseHp <= 0) {
-            System.out.println("Defeat...");
-            isRunning = false;
-        } else if (enemyBaseHp <= 0) {
-            System.out.println("Victory!");
-            isRunning = false;
-        }
-    }
+        findTarget() {
+            // 檢查是否碰到敵方主堡
+            const enemyBase = this.isPlayer ? bases.enemy : bases.player;
+            const distToBase = this.isPlayer ? (enemyBase.x - (this.x + this.width)) : (this.x - (enemyBase.x + enemyBase.width));
+            if (distToBase <= this.range) return enemyBase;
 
-    private void processUnits(ArrayList<Unit> attackers, ArrayList<Unit> defenders, int enemyBaseX, int baseHp, boolean isEnemyAttacking) {
-        Iterator<Unit> it = attackers.iterator();
-        while (it.hasNext()) {
-            Unit u = it.next();
-            if (u.hp <= 0) {
-                it.remove();
-                continue;
-            }
+            // 檢查敵方單位
+            let closest = null;
+            let minDist = Infinity;
 
-            boolean canMove = true;
-            
-            // 索敵邏輯：根據自身的「射程 (range)」來判定是否停止並攻擊
-            for (Unit target : defenders) {
-                if (Math.abs(u.x - target.x) <= u.range) { 
-                    canMove = false;
-                    if (frameCount % 30 == 0) { // 攻擊頻率
-                        target.hp -= u.damage;
+            for (let u of units) {
+                if (u.hp <= 0 || u.isPlayer === this.isPlayer) continue;
+                
+                let dist = this.isPlayer ? (u.x - (this.x + this.width)) : (this.x - (u.x + u.width));
+                if (dist <= this.range && dist >= 0) {
+                    if (dist < minDist) {
+                        minDist = dist;
+                        closest = u;
                     }
-                    break;
                 }
             }
-            
-            // 攻擊主堡判定
-            if (canMove && Math.abs(u.x - enemyBaseX) <= u.range) {
-                canMove = false;
-                if (frameCount % 30 == 0) {
-                    if (isEnemyAttacking) playerBaseHp -= u.damage;
-                    else enemyBaseHp -= u.damage;
-                }
-            }
-
-            if (canMove) u.x += u.speed;
+            return closest;
         }
     }
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
+    // === UI 更新與互動 ===
+    const uiMoney = document.getElementById('wallet-info');
+    const btnWallet = document.getElementById('btn-upgrade-wallet');
+    const btnLaser = document.getElementById('btn-laser');
+
+    function updateUI() {
+        uiMoney.innerText = `💰 ${Math.floor(game.money)} / ${game.maxMoney} (Lv.${game.walletLevel})`;
         
-        g.setColor(Color.DARK_GRAY);
-        g.drawLine(0, 320, WIDTH, 320);
+        // 錢包升級按鈕
+        let upgradeCost = game.walletLevel * 150;
+        btnWallet.innerText = `🔼 升級錢包 (Cost: ${upgradeCost})`;
+        btnWallet.disabled = game.money < upgradeCost;
 
-        // 主堡
-        g.setColor(Color.BLUE);
-        g.fillRect(20, 220, 80, 100);
-        g.setColor(Color.RED);
-        g.fillRect(700, 220, 80, 100);
+        // 產兵按鈕狀態
+        document.getElementById('btn-spawn-doge').disabled = game.money < UNIT_DATA.doge.cost;
+        document.getElementById('btn-spawn-sniper').disabled = game.money < UNIT_DATA.sniper.cost;
+        document.getElementById('btn-spawn-titan').disabled = game.money < UNIT_DATA.titan.cost;
 
-        // UI 資訊
-        g.setColor(Color.BLACK);
-        g.setFont(new Font("微軟正黑體", Font.BOLD, 14));
-        g.drawString("金錢: " + money + " / " + moneyCap, 20, 20);
-        g.drawString("玩家 HP: " + playerBaseHp, 20, 40);
-        g.drawString("敵軍 HP: " + enemyBaseHp, 650, 40);
-        
-        // 繪製操作清單與冷卻狀態
-        g.drawString("[1] 砲灰狗 ($50) CD: " + (cooldowns[0]>0?"Wait":"Ready"), 200, 20);
-        g.drawString("[2] 牆壁狗 ($150) CD: " + (cooldowns[1]>0?"Wait":"Ready"), 350, 20);
-        g.drawString("[3] 長腿狗 ($300) CD: " + (cooldowns[2]>0?"Wait":"Ready"), 200, 40);
-        g.drawString("[4] 巨神狗 ($1000) CD: " + (cooldowns[3]>0?"Wait":"Ready"), 350, 40);
-
-        // 畫單位
-        for (Unit u : playerUnits) drawUnit(g, u);
-        for (Unit u : enemyUnits) drawUnit(g, u);
+        // 雷射按鈕
+        let laserPercent = Math.floor((game.laserCharge / game.laserMax) * 100);
+        btnLaser.innerText = laserPercent >= 100 ? '⚡ 發射雷射！' : `⚡ 雷射砲 (${laserPercent}%)`;
+        btnLaser.disabled = laserPercent < 100;
     }
 
-    private void drawUnit(Graphics g, Unit u) {
-        g.setColor(u.color);
-        int size = u.name.equals("巨神狗") || u.name.equals("野猩猩") ? 40 : 20;
-        g.fillRect(u.x, u.y - size, size, size);
-        g.setColor(Color.BLACK);
-        g.setFont(new Font("Arial", Font.PLAIN, 10));
-        g.drawString(u.hp + "", u.x, u.y - size - 5);
+    // 事件監聽器
+    btnWallet.onclick = () => {
+        let cost = game.walletLevel * 150;
+        if (game.money >= cost) {
+            game.money -= cost;
+            game.walletLevel++;
+            game.maxMoney += 150;
+            game.moneyRate += 0.2;
+        }
+    };
+
+    function spawnUnit(typeData, isPlayer) {
+        if (isPlayer && game.money >= typeData.cost) {
+            game.money -= typeData.cost;
+            units.push(new Unit(bases.player.x + bases.player.width, 300, typeData, true));
+        } else if (!isPlayer) {
+            units.push(new Unit(bases.enemy.x - typeData.width, 300, typeData, false));
+        }
     }
 
-    public static void main(String[] args) {
-        JFrame frame = new JFrame("狗狗大戰爭 V0.2 (多兵種)");
-        BattleDogsGameV2 game = new BattleDogsGameV2();
-        frame.add(game);
-        frame.pack();
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setLocationRelativeTo(null);
-        frame.setVisible(true);
-        game.startGame();
-    }
-}
+    document.getElementById('btn-spawn-doge').onclick = () => spawnUnit(UNIT_DATA.doge, true);
+    document.getElementById('btn-spawn-sniper').onclick = () => spawnUnit(UNIT_DATA.sniper, true);
+    document.getElementById('btn-spawn-titan').onclick = () => spawnUnit(UNIT_DATA.titan, true);
 
-class Unit {
-    String name;
-    int x, y;
-    int speed;
-    int hp;
-    int damage;
-    int range;     // 新增：射程
-    Color color;   // 新增：顏色區分兵種
-    boolean isPlayer;
+    btnLaser.onclick = () => {
+        if (game.laserCharge >= game.laserMax) {
+            game.laserCharge = 0;
+            document.getElementById('game-container').classList.add('laser-active');
+            setTimeout(() => document.getElementById('game-container').classList.remove('laser-active'), 500);
+            
+            // 雷射傷害與強制擊退 (打斷與保命核心)
+            units.forEach(u => {
+                if (!u.isPlayer) {
+                    u.hp -= 300;
+                    u.x += 100; // 強制往右擊退
+                }
+            });
+        }
+    };
 
-    public Unit(String name, int x, int y, int speed, int hp, int damage, int range, Color color, boolean isPlayer) {
-        this.name = name;
-        this.x = x;
-        this.y = y;
-        this.speed = speed;
-        this.hp = hp;
-        this.damage = damage;
-        this.range = range;
-        this.color = color;
-        this.isPlayer = isPlayer;
+    // === 敵軍自動生成 AI (極簡版) ===
+    let enemyTimer = 0;
+    function enemyAI(deltaTime) {
+        enemyTimer += deltaTime;
+        if (enemyTimer > 3000) {
+            spawnUnit(UNIT_DATA.enemy1, false);
+            enemyTimer = 0;
+            // 偶爾生成 Boss
+            if (Math.random() < 0.2) spawnUnit(UNIT_DATA.enemyBoss, false);
+        }
     }
-}
+
+    // === 繪製基地 ===
+    function drawBase(base) {
+        ctx.fillStyle = base.color;
+        ctx.fillRect(base.x, base.y - base.height, base.width, base.height);
+        // 血條
+        ctx.fillStyle = 'red';
+        ctx.fillRect(base.x, base.y - base.height - 15, base.width, 10);
+        ctx.fillStyle = 'lightgreen';
+        ctx.fillRect(base.x, base.y - base.height - 15, base.width * (base.hp / base.maxHp), 10);
+    }
+
+    // === 主遊戲迴圈 ===
+    function gameLoop(timestamp) {
+        if (game.isGameOver) return;
+        const deltaTime = timestamp - lastTime;
+        lastTime = timestamp;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // 系統資源更新
+        game.money = Math.min(game.money + (game.moneyRate * (deltaTime / 16)), game.maxMoney);
+        game.laserCharge = Math.min(game.laserCharge + (1 * (deltaTime / 16)), game.laserMax);
+
+        enemyAI(deltaTime);
+
+        // 更新與清理單位
+        for (let i = units.length - 1; i >= 0; i--) {
+            units[i].update(deltaTime);
+            if (units[i].hp <= 0) units.splice(i, 1);
+        }
+
+        // 繪製
+        drawBase(bases.player);
+        drawBase(bases.enemy);
+        units.forEach(u => u.draw(ctx));
+
+        updateUI();
+
+        // 勝負判斷
+        if (bases.player.hp <= 0) {
+            alert("遊戲結束！你的主堡被摧毀了！");
+            game.isGameOver = true;
+        } else if (bases.enemy.hp <= 0) {
+            alert("勝利！你推平了敵軍主堡！");
+            game.isGameOver = true;
+        }
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    requestAnimationFrame((time) => {
+        lastTime = time;
+        gameLoop(time);
+    });
+</script>
+</body>
+</html>
