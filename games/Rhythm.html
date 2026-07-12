@@ -6,88 +6,64 @@
     <title>節奏刺客：一閃</title>
     <style>
         body {
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #222;
-            color: white;
-            font-family: sans-serif;
-            overflow: hidden;
+            margin: 0; display: flex; justify-content: center; align-items: center;
+            height: 100vh; background-color: #222; color: white;
+            font-family: 'Courier New', Courier, monospace; overflow: hidden;
         }
         #startScreen {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 100;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 100;
         }
         .device-btn {
-            background-color: #00d2ff;
-            color: #111;
-            border: none;
-            padding: 15px 40px;
-            margin: 10px;
-            font-size: 20px;
-            font-weight: bold;
-            border-radius: 8px;
-            cursor: pointer;
-            transition: 0.2s;
+            background-color: #00d2ff; color: #111; border: none; padding: 15px 40px;
+            margin: 10px; font-size: 20px; font-weight: bold; border-radius: 8px;
+            cursor: pointer; transition: 0.2s;
         }
-        .device-btn:hover { background-color: #00a0cc; }
+        .device-btn:hover { background-color: #00a0cc; transform: scale(1.05); }
         canvas {
-            background-color: #111;
-            border: 2px solid #555;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.8);
-            max-width: 100%;
+            background-color: #111; border: 2px solid #555;
+            box-shadow: 0 0 30px rgba(0, 210, 255, 0.2); max-width: 100%;
         }
         #ui {
-            position: absolute;
-            top: 10px;
-            text-align: center;
-            z-index: 10;
+            position: absolute; top: 20px; text-align: center; z-index: 10;
+            width: 100%; display: flex; justify-content: space-around;
+            pointer-events: none;
+        }
+        h1, h2 { margin: 0; text-shadow: 2px 2px 4px #000; }
+        #levelUpText {
+            position: absolute; top: 40%; font-size: 48px; color: #ffeb3b;
+            text-shadow: 0 0 20px #ff9800; opacity: 0; transition: opacity 0.5s;
+            pointer-events: none; z-index: 50;
         }
         #touchControls {
-            display: none;
-            position: absolute;
-            bottom: 30px;
-            width: 100%;
-            justify-content: space-between;
-            padding: 0 40px;
-            box-sizing: border-box;
-            z-index: 20;
+            display: none; position: absolute; bottom: 30px; width: 100%;
+            justify-content: space-between; padding: 0 40px; box-sizing: border-box; z-index: 20;
         }
         .touch-btn {
-            background-color: rgba(255, 255, 255, 0.2);
-            border: 2px solid rgba(255, 255, 255, 0.5);
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            user-select: none;
+            background-color: rgba(255, 255, 255, 0.1); border: 2px solid rgba(0, 210, 255, 0.5);
+            color: #00d2ff; font-size: 24px; font-weight: bold; width: 100px; height: 100px;
+            border-radius: 50%; user-select: none;
         }
-        .touch-btn:active { background-color: rgba(0, 210, 255, 0.5); }
+        .touch-btn:active { background-color: rgba(0, 210, 255, 0.4); }
     </style>
 </head>
 <body>
 
     <div id="startScreen">
-        <h1>節奏刺客：一閃</h1>
-        <p>請選擇您的遊玩裝置 (將開啟音效)：</p>
+        <h1 style="font-size: 40px; margin-bottom: 20px; color: #00d2ff;">節奏刺客：一閃</h1>
+        <p>選擇裝置開始 (請調高音量享受節奏)：</p>
         <button class="device-btn" onclick="startGame('mobile')">📱 手機</button>
         <button class="device-btn" onclick="startGame('tablet')">💊 平板</button>
         <button class="device-btn" onclick="startGame('desktop')">💻 電腦</button>
     </div>
 
     <div id="ui">
-        <h1 id="scoreBoard">分數: 0</h1>
+        <h2 id="levelBoard" style="color: #ffeb3b;">LEVEL: 1</h2>
+        <h2 id="scoreBoard">SCORE: 0</h2>
     </div>
+    
+    <div id="levelUpText">SPEED UP!</div>
 
     <canvas id="gameCanvas" width="800" height="400"></canvas>
 
@@ -100,90 +76,119 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     const scoreBoard = document.getElementById('scoreBoard');
+    const levelBoard = document.getElementById('levelBoard');
+    const levelUpText = document.getElementById('levelUpText');
     const startScreen = document.getElementById('startScreen');
     const touchControls = document.getElementById('touchControls');
 
-    // 遊戲核心變數
+    // ==== 遊戲核心與關卡變數 ====
     let score = 0;
+    let level = 1;
+    let kills = 0; // 用來計算何時升級
     let enemies = [];
     
-    // 玩家狀態新增：attackTimer (動畫計時器) 與 attackSide (攻擊方向)
-    const player = { x: 400, y: 200, size: 40, color: '#00d2ff', attackTimer: 0, attackSide: null };
+    // 動態難度變數
+    let enemySpeed = 3.5;       // 初始敵人移動速度
+    let spawnIntervalTime = 1600; // 初始敵人生成間隔 (毫秒)
     
+    const player = { x: 400, y: 200, size: 40, color: '#00d2ff', attackTimer: 0, attackSide: null };
     const hitZoneLeft = { x: 280, width: 60 };
     const hitZoneRight = { x: 460, width: 60 };
-    const enemySpeed = 4;
     const enemySize = 30;
+    
     let gameInterval;
+    let musicInterval;
     let animationId;
+    let beatStep = 0; // 用來記錄目前的節拍
 
-    // Web Audio API 音效系統 (不需要外部檔案)
+    // ==== Web Audio API 音效與音樂系統 ====
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     
+    // 播放音效 (揮劍、砍中、失誤)
     function playSound(type) {
-        if (audioCtx.state === 'suspended') audioCtx.resume();
+        if (audioCtx.state === 'suspended') return;
         const osc = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
-        osc.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
 
         if (type === 'swing') {
-            // 揮劍的風聲
             osc.type = 'triangle';
             osc.frequency.setValueAtTime(400, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         } else if (type === 'hit') {
-            // 砍中的清脆聲
             osc.type = 'square';
             osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
-            gainNode.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.1);
+            osc.frequency.exponentialRampToValueAtTime(1500, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
         } else if (type === 'miss') {
-            // 失誤的低沉聲
             osc.type = 'sawtooth';
             osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-            gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-            gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
-            osc.start();
-            osc.stop(audioCtx.currentTime + 0.2);
+            gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.2);
         }
     }
 
+    // 背景音樂：程序合成電子鼓 (大鼓 Kick 與 閉鈸 Hi-hat)
+    function playBeat() {
+        if (audioCtx.state === 'suspended') return;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
+        
+        if (beatStep % 2 === 0) {
+            // 大鼓 (Kick) - 沉悶的重音
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+            osc.frequency.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+        } else {
+            // 閉鈸 (Hi-hat) - 短促的高音
+            osc.type = 'square';
+            osc.frequency.setValueAtTime(1000, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.05);
+            osc.start(); osc.stop(audioCtx.currentTime + 0.05);
+        }
+        beatStep++;
+    }
+
+    // ==== 遊戲邏輯 ====
     function spawnEnemy() {
         const isLeft = Math.random() < 0.5;
-        const enemy = {
-            x: isLeft ? 0 : canvas.width,
+        enemies.push({
+            x: isLeft ? -enemySize : canvas.width + enemySize, // 從畫面外生成
             y: 200 - enemySize / 2,
             direction: isLeft ? 1 : -1,
             side: isLeft ? 'left' : 'right'
-        };
-        enemies.push(enemy);
+        });
     }
 
     function triggerAttack(side) {
-        // 設定拔刀動畫狀態 (播放 15 個 frame)
         player.attackTimer = 15;
         player.attackSide = side;
-        playSound('swing'); // 播放揮劍聲
+        playSound('swing');
 
         let hit = checkHit(side);
         if (hit) {
             score += 10;
-            playSound('hit'); // 播放砍中聲
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; // 稍微調暗一點的閃光，保護眼睛
+            kills++;
+            playSound('hit');
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            checkLevelUp(); // 每次砍中檢查是否升級
         } else {
             score -= 5;
-            playSound('miss'); // 播放空揮/失誤聲
+            playSound('miss');
         }
-        scoreBoard.innerText = `分數: ${score}`;
+        scoreBoard.innerText = `SCORE: ${score}`;
     }
 
     function checkHit(side) {
@@ -191,11 +196,9 @@
             let e = enemies[i];
             if (e.side === side) {
                 let inZone = false;
-                if (side === 'left' && e.x + enemySize > hitZoneLeft.x && e.x < hitZoneLeft.x + hitZoneLeft.width) {
-                    inZone = true;
-                } else if (side === 'right' && e.x < hitZoneRight.x + hitZoneRight.width && e.x + enemySize > hitZoneRight.x) {
-                    inZone = true;
-                }
+                if (side === 'left' && e.x + enemySize > hitZoneLeft.x && e.x < hitZoneLeft.x + hitZoneLeft.width) inZone = true;
+                else if (side === 'right' && e.x < hitZoneRight.x + hitZoneRight.width && e.x + enemySize > hitZoneRight.x) inZone = true;
+                
                 if (inZone) {
                     enemies.splice(i, 1); 
                     return true;
@@ -205,60 +208,71 @@
         return false;
     }
 
+    // 升級系統 (動態增加難度)
+    function checkLevelUp() {
+        if (kills > 0 && kills % 10 === 0) { // 每殺 10 個敵人升一級
+            level++;
+            levelBoard.innerText = `LEVEL: ${level}`;
+            
+            // 難度參數調整：速度變快、生成時間縮短
+            enemySpeed += 1.2;
+            spawnIntervalTime = Math.max(600, spawnIntervalTime - 250); // 最快不會低於 0.6 秒一隻
+
+            // 顯示升級提示特效
+            levelUpText.style.opacity = 1;
+            setTimeout(() => { levelUpText.style.opacity = 0; }, 1000);
+
+            // 重新設定定時器，讓音樂和敵人都變快！
+            clearInterval(gameInterval);
+            clearInterval(musicInterval);
+            gameInterval = setInterval(spawnEnemy, spawnIntervalTime);
+            // 音樂節拍是敵人生成時間的一半 (8分音符的感覺)
+            musicInterval = setInterval(playBeat, spawnIntervalTime / 2);
+        }
+    }
+
+    // ==== 控制與繪圖 ====
     window.addEventListener('keydown', (e) => {
         if (startScreen.style.display === 'none') {
             if (e.key === 'ArrowLeft') triggerAttack('left');
             if (e.key === 'ArrowRight') triggerAttack('right');
         }
     });
-
-    document.getElementById('btnLeft').addEventListener('touchstart', (e) => { e.preventDefault(); triggerAttack('left'); });
-    document.getElementById('btnLeft').addEventListener('mousedown', (e) => { e.preventDefault(); triggerAttack('left'); });
     
-    document.getElementById('btnRight').addEventListener('touchstart', (e) => { e.preventDefault(); triggerAttack('right'); });
-    document.getElementById('btnRight').addEventListener('mousedown', (e) => { e.preventDefault(); triggerAttack('right'); });
+    ['btnLeft', 'btnRight'].forEach(id => {
+        const btn = document.getElementById(id);
+        const side = id === 'btnLeft' ? 'left' : 'right';
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerAttack(side); });
+        btn.addEventListener('mousedown', (e) => { e.preventDefault(); triggerAttack(side); });
+    });
 
     function gameLoop() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 畫出打擊區
+        // 畫出打擊區 (綠色)
         ctx.fillStyle = 'rgba(0, 255, 0, 0.15)';
         ctx.fillRect(hitZoneLeft.x, player.y - 30, hitZoneLeft.width, 60);
         ctx.fillRect(hitZoneRight.x, player.y - 30, hitZoneRight.width, 60);
 
-        // ==== 畫出拔刀動畫 ====
+        // 畫出拔刀動畫
         if (player.attackTimer > 0) {
             ctx.save();
             ctx.translate(player.x, player.y);
-            
-            // 如果是往左砍，把畫布水平翻轉，這樣我們只要寫一套揮劍邏輯就好
-            if (player.attackSide === 'left') {
-                ctx.scale(-1, 1); 
-            }
-
-            // 計算動畫進度 (0 到 1 之間)
+            if (player.attackSide === 'left') ctx.scale(-1, 1); 
             let progress = 1 - (player.attackTimer / 15);
-            
-            // 旋轉畫布來做揮砍的弧度 (從右上往右下揮)
             ctx.rotate(-Math.PI / 3 + (progress * Math.PI / 1.5));
-            
-            // 畫出劍身 (白色長條)
             ctx.fillStyle = '#fff';
             ctx.fillRect(15, -4, 60, 8);
-            
-            // 畫出揮劍殘影 (半透明弧線)
             ctx.beginPath();
             ctx.arc(0, 0, 50, -Math.PI / 3, -Math.PI / 3 + (progress * Math.PI / 1.5));
-            ctx.strokeStyle = `rgba(0, 210, 255, ${1 - progress})`; // 殘影會隨時間變透明
+            ctx.strokeStyle = `rgba(0, 210, 255, ${1 - progress})`; 
             ctx.lineWidth = 15;
             ctx.stroke();
-
             ctx.restore();
-            
-            player.attackTimer--; // 倒數計時器
+            player.attackTimer--; 
         }
 
-        // 畫出玩家主體 (蓋在動畫上面)
+        // 畫出玩家
         ctx.fillStyle = player.color;
         ctx.fillRect(player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
 
@@ -268,14 +282,17 @@
             e.x += e.direction * enemySpeed;
             
             ctx.fillStyle = '#ff003c';
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = '#ff003c';
             ctx.fillRect(e.x, e.y, enemySize, enemySize);
+            ctx.shadowBlur = 0; // 重置陰影
 
-            // 敵人碰到玩家
+            // 漏接扣分
             if ((e.side === 'left' && e.x > player.x) || (e.side === 'right' && e.x < player.x)) {
                 enemies.splice(i, 1);
                 score -= 10;
-                playSound('miss'); // 被撞到也播放失誤聲
-                scoreBoard.innerText = `分數: ${score}`;
+                playSound('miss');
+                scoreBoard.innerText = `SCORE: ${score}`;
                 i--;
             }
         }
@@ -284,22 +301,25 @@
 
     function startGame(deviceType) {
         startScreen.style.display = 'none';
-        
-        // 喚醒 AudioContext (瀏覽器規定必須透過使用者點擊來解鎖音效)
         if (audioCtx.state === 'suspended') audioCtx.resume();
-
         if (deviceType === 'mobile' || deviceType === 'tablet') {
             touchControls.style.display = 'flex';
         }
 
-        score = 0;
+        // 重置所有變數
+        score = 0; level = 1; kills = 0;
+        enemySpeed = 3.5; spawnIntervalTime = 1600; beatStep = 0;
         enemies = [];
-        scoreBoard.innerText = `分數: ${score}`;
+        scoreBoard.innerText = `SCORE: ${score}`;
+        levelBoard.innerText = `LEVEL: ${level}`;
         
         clearInterval(gameInterval);
+        clearInterval(musicInterval);
         cancelAnimationFrame(animationId);
         
-        gameInterval = setInterval(spawnEnemy, 1500); 
+        // 啟動排程
+        gameInterval = setInterval(spawnEnemy, spawnIntervalTime); 
+        musicInterval = setInterval(playBeat, spawnIntervalTime / 2); // 音樂節拍速度
         gameLoop(); 
     }
 </script>
