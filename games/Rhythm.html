@@ -10,7 +10,6 @@
             height: 100vh; background-color: #222; color: white;
             font-family: 'Courier New', Courier, monospace; overflow: hidden;
         }
-        /* 浮動視窗共用樣式 (開始畫面 & 死亡畫面) */
         .overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background-color: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column;
@@ -40,9 +39,9 @@
         #hpBoard { color: #ff3366; font-size: 28px; letter-spacing: 5px; }
         
         #levelUpText {
-            position: absolute; top: 35%; font-size: 48px; color: #ffeb3b;
+            position: absolute; top: 35%; font-size: 40px; color: #ffeb3b;
             text-shadow: 0 0 20px #ff9800; opacity: 0; transition: opacity 0.5s;
-            pointer-events: none; z-index: 50;
+            pointer-events: none; z-index: 50; text-align: center;
         }
 
         #touchControls {
@@ -61,7 +60,7 @@
 
     <div id="startScreen" class="overlay">
         <h1 style="font-size: 40px; margin-bottom: 20px; color: #00d2ff;">節奏刺客：一閃</h1>
-        <p>選擇裝置開始 (請調高音量享受 8-bit 音樂)：</p>
+        <p>請調高音量，體驗動態關卡配樂：</p>
         <button class="device-btn" onclick="startGame('mobile')">📱 手機</button>
         <button class="device-btn" onclick="startGame('tablet')">💊 平板</button>
         <button class="device-btn" onclick="startGame('desktop')">💻 電腦</button>
@@ -79,7 +78,7 @@
         <h2 id="scoreBoard">SCORE: 0</h2>
     </div>
     
-    <div id="levelUpText">SPEED UP!</div>
+    <div id="levelUpText">LEVEL UP!<br><span id="levelDesc" style="font-size:24px; color:#fff;"></span></div>
 
     <canvas id="gameCanvas" width="800" height="400"></canvas>
 
@@ -95,197 +94,169 @@
     const levelBoard = document.getElementById('levelBoard');
     const hpBoard = document.getElementById('hpBoard');
     const levelUpText = document.getElementById('levelUpText');
+    const levelDesc = document.getElementById('levelDesc');
     const startScreen = document.getElementById('startScreen');
     const gameOverScreen = document.getElementById('gameOverScreen');
-    const finalScoreText = document.getElementById('finalScore');
-    const touchControls = document.getElementById('touchControls');
-
-    // ==== 遊戲核心變數 ====
-    let score = 0;
-    let level = 1;
-    let kills = 0; 
-    let hp = 3;         // 生命值
-    let isGameOver = false;
-    let enemies = [];
-    let currentDevice = 'desktop';
     
-    // 難度參數 (下修初始難度)
-    let enemySpeed = 3;            // 變慢一點
-    let spawnIntervalTime = 1800;  // 生成間隔變長
+    // ==== 關卡劇本設定 (核心更新) ====
+    // null 代表「休止符」，用來創造切分音與不同的節奏感
+    const levelConfigs = {
+        1: { 
+            name: "LV1: 潛伏 (標準節奏)", speed: 3.5, interval: 1800,
+            melody: [261.63, 311.13, 392.00, 311.13, 349.23, 466.16, 392.00, 523.25],
+            bass:   [130.81, 130.81, 130.81, 155.56, 174.61, 174.61, 196.00, 196.00] 
+        },
+        2: { 
+            name: "LV2: 突進 (輕快切分音)", speed: 4.5, interval: 1200,
+            melody: [392.00, null, 466.16, 523.25, 587.33, null, 523.25, 698.46],
+            bass:   [196.00, null, 196.00, 174.61, 155.56, null, 155.56, 130.81] 
+        },
+        3: { 
+            name: "LV3: 重裝 (慢節拍, 敵人極快)", speed: 7.0, interval: 2200, // 音樂很慢，但敵人衝超快！
+            melody: [196.00, null, null, 261.63, 196.00, null, null, 155.56],
+            bass:   [65.41, null, null, 87.31, 65.41, null, null, 49.00] // 超低音
+        },
+        4: { 
+            name: "LV4: 狂熱 (極速連打)", speed: 5.0, interval: 800, // 瘋狂連打
+            melody: [523.25, 587.33, 659.25, 698.46, 783.99, 698.46, 659.25, 587.33],
+            bass:   [130.81, 155.56, 174.61, 196.00, 261.63, 196.00, 174.61, 155.56] 
+        }
+    };
+
+    let currentMelody = [];
+    let currentBass = [];
+    
+    // ==== 遊戲狀態變數 ====
+    let score = 0; let level = 1; let kills = 0; let hp = 3; let isGameOver = false;
+    let enemies = []; let currentDevice = 'desktop';
+    let enemySpeed = 3.5; let spawnIntervalTime = 1800;
     
     const player = { x: 400, y: 200, size: 40, color: '#00d2ff', attackTimer: 0, attackSide: null };
-    // 打擊區加寬，讓玩家更好按
-    const hitZoneLeft = { x: 260, width: 90 }; 
-    const hitZoneRight = { x: 450, width: 90 };
+    const hitZoneLeft = { x: 260, width: 90 }; const hitZoneRight = { x: 450, width: 90 };
     const enemySize = 30;
-    
     let gameInterval, musicInterval, animationId;
-    
-    // ==== Web Audio API：音效與 8-bit 音樂合成器 ====
-    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // 忍者風 8-bit 主旋律 (小調五聲音階)
-    const melodyNotes = [261.63, 311.13, 392.00, 311.13, 349.23, 466.16, 392.00, 523.25]; 
-    // 沉重的 Bass 線
-    const bassNotes = [130.81, 130.81, 130.81, 155.56, 174.61, 174.61, 196.00, 196.00]; 
     let noteStep = 0;
+
+    // ==== 音效系統 ====
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 
     function playSound(type) {
         if (audioCtx.state === 'suspended') return;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
+        const osc = audioCtx.createOscillator(); const gain = audioCtx.createGain();
         osc.connect(gain); gain.connect(audioCtx.destination);
 
         if (type === 'swing') {
-            osc.type = 'triangle';
-            osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(300, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(50, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.4, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         } else if (type === 'hit') {
-            osc.type = 'square';
-            osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+            osc.type = 'square'; osc.frequency.setValueAtTime(800, audioCtx.currentTime);
             osc.frequency.exponentialRampToValueAtTime(1200, audioCtx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            gain.gain.setValueAtTime(0.2, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
         } else if (type === 'hurt') {
-            osc.type = 'sawtooth';
-            osc.frequency.setValueAtTime(100, audioCtx.currentTime);
-            gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-            osc.start(); osc.stop(audioCtx.currentTime + 0.3);
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.5, audioCtx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
         }
+        osc.start(); osc.stop(audioCtx.currentTime + 0.3);
     }
 
-    // 播放 8-bit 背景音樂
     function playMusicBeat() {
         if (audioCtx.state === 'suspended' || isGameOver) return;
         
         const t = audioCtx.currentTime;
         const step = noteStep % 8;
 
-        // 1. 主旋律 (方波)
-        const melOsc = audioCtx.createOscillator();
-        const melGain = audioCtx.createGain();
-        melOsc.type = 'square';
-        melOsc.frequency.setValueAtTime(melodyNotes[step], t);
-        melGain.gain.setValueAtTime(0.05, t);
-        melGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
-        melOsc.connect(melGain); melGain.connect(audioCtx.destination);
-        melOsc.start(t); melOsc.stop(t + 0.2);
+        // 檢查是否有音符 (不是 null 才會發聲，創造節奏變化)
+        if (currentMelody[step]) {
+            const melOsc = audioCtx.createOscillator(); const melGain = audioCtx.createGain();
+            melOsc.type = 'square'; melOsc.frequency.setValueAtTime(currentMelody[step], t);
+            melGain.gain.setValueAtTime(0.05, t); melGain.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+            melOsc.connect(melGain); melGain.connect(audioCtx.destination);
+            melOsc.start(t); melOsc.stop(t + 0.2);
+        }
 
-        // 2. Bass (三角波)
-        const bassOsc = audioCtx.createOscillator();
-        const bassGain = audioCtx.createGain();
-        bassOsc.type = 'triangle';
-        bassOsc.frequency.setValueAtTime(bassNotes[step], t);
-        bassGain.gain.setValueAtTime(0.15, t);
-        bassGain.gain.linearRampToValueAtTime(0.01, t + 0.3);
-        bassOsc.connect(bassGain); bassGain.connect(audioCtx.destination);
-        bassOsc.start(t); bassOsc.stop(t + 0.3);
+        if (currentBass[step]) {
+            const bassOsc = audioCtx.createOscillator(); const bassGain = audioCtx.createGain();
+            bassOsc.type = 'triangle'; bassOsc.frequency.setValueAtTime(currentBass[step], t);
+            bassGain.gain.setValueAtTime(0.2, t); bassGain.gain.linearRampToValueAtTime(0.01, t + 0.3);
+            bassOsc.connect(bassGain); bassGain.connect(audioCtx.destination);
+            bassOsc.start(t); bassOsc.stop(t + 0.3);
+        }
 
-        // 3. 節奏大鼓
-        if (step % 2 === 0) {
-            const kickOsc = audioCtx.createOscillator();
-            const kickGain = audioCtx.createGain();
-            kickOsc.frequency.setValueAtTime(150, t);
-            kickOsc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
-            kickGain.gain.setValueAtTime(0.5, t);
-            kickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+        // 大鼓 (只在特定節拍打擊)
+        if (step % 2 === 0 || (level % 4 === 2 && step === 3)) { // 讓輕快的關卡大鼓更活潑
+            const kickOsc = audioCtx.createOscillator(); const kickGain = audioCtx.createGain();
+            kickOsc.frequency.setValueAtTime(150, t); kickOsc.frequency.exponentialRampToValueAtTime(0.01, t + 0.1);
+            kickGain.gain.setValueAtTime(0.5, t); kickGain.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
             kickOsc.connect(kickGain); kickGain.connect(audioCtx.destination);
             kickOsc.start(t); kickOsc.stop(t + 0.1);
         }
-
         noteStep++;
     }
 
-    // ==== 遊戲邏輯 ====
+    // ==== 關卡與遊戲邏輯 ====
+    function applyLevel(lv) {
+        levelBoard.innerText = `LV: ${lv}`;
+        
+        // 使用 1~4 的劇本循環，每循環一次整體難度往上疊加
+        let cycleLv = ((lv - 1) % 4) + 1; 
+        let loopCount = Math.floor((lv - 1) / 4); 
+        let config = levelConfigs[cycleLv];
+
+        // 套用劇本並計算輪迴難度加成
+        enemySpeed = config.speed + (loopCount * 1.5); 
+        spawnIntervalTime = Math.max(500, config.interval - (loopCount * 200)); 
+        currentMelody = config.melody;
+        currentBass = config.bass;
+
+        // UI 提示
+        levelDesc.innerText = config.name + (loopCount > 0 ? ` (難度 +${loopCount})` : "");
+        levelUpText.style.opacity = 1;
+        setTimeout(() => { levelUpText.style.opacity = 0; }, 1500);
+
+        // 重啟音樂與生成計時器
+        clearInterval(gameInterval); clearInterval(musicInterval);
+        gameInterval = setInterval(spawnEnemy, spawnIntervalTime);
+        musicInterval = setInterval(playMusicBeat, spawnIntervalTime / 4);
+    }
+
     function spawnEnemy() {
         if (isGameOver) return;
         const isLeft = Math.random() < 0.5;
-        enemies.push({
-            x: isLeft ? -enemySize : canvas.width + enemySize,
-            y: 200 - enemySize / 2,
-            direction: isLeft ? 1 : -1,
-            side: isLeft ? 'left' : 'right'
-        });
+        enemies.push({ x: isLeft ? -enemySize : canvas.width + enemySize, y: 200 - enemySize / 2, direction: isLeft ? 1 : -1, side: isLeft ? 'left' : 'right' });
     }
 
     function triggerAttack(side) {
         if (isGameOver) return;
-        player.attackTimer = 15;
-        player.attackSide = side;
-        playSound('swing');
+        player.attackTimer = 15; player.attackSide = side; playSound('swing');
 
-        let hit = checkHit(side);
-        if (hit) {
-            score += 10;
-            kills++;
-            playSound('hit');
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            checkLevelUp(); 
-        }
-        scoreBoard.innerText = `SCORE: ${score}`;
-    }
-
-    function checkHit(side) {
+        let hit = false;
         for (let i = 0; i < enemies.length; i++) {
             let e = enemies[i];
-            if (e.side === side) {
-                let inZone = false;
-                if (side === 'left' && e.x + enemySize > hitZoneLeft.x && e.x < hitZoneLeft.x + hitZoneLeft.width) inZone = true;
-                else if (side === 'right' && e.x < hitZoneRight.x + hitZoneRight.width && e.x + enemySize > hitZoneRight.x) inZone = true;
-                
-                if (inZone) {
-                    enemies.splice(i, 1); 
-                    return true;
-                }
+            if (e.side === side && ((side === 'left' && e.x + enemySize > hitZoneLeft.x && e.x < hitZoneLeft.x + hitZoneLeft.width) || (side === 'right' && e.x < hitZoneRight.x + hitZoneRight.width && e.x + enemySize > hitZoneRight.x))) {
+                enemies.splice(i, 1); hit = true; break;
             }
         }
-        return false;
+
+        if (hit) {
+            score += 10; kills++; playSound('hit');
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.8)'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // 為了讓玩家更快體驗音樂變化，每 10 殺升級一次
+            if (kills > 0 && kills % 10 === 0) { level++; applyLevel(level); }
+        }
+        scoreBoard.innerText = `SCORE: ${score}`;
     }
 
     function updateHP() {
         hpBoard.innerText = '❤️'.repeat(hp) + '🖤'.repeat(3 - hp);
         if (hp <= 0) {
-            gameOver();
+            isGameOver = true; clearInterval(gameInterval); clearInterval(musicInterval);
+            document.getElementById('finalScore').innerText = `最終分數: ${score}`;
+            gameOverScreen.style.display = 'flex';
         }
     }
 
-    function gameOver() {
-        isGameOver = true;
-        clearInterval(gameInterval);
-        clearInterval(musicInterval);
-        cancelAnimationFrame(animationId);
-        
-        finalScoreText.innerText = `最終分數: ${score}`;
-        gameOverScreen.style.display = 'flex';
-    }
-
-    // 升級系統 (每 15 殺才升級，避免難度暴增)
-    function checkLevelUp() {
-        if (kills > 0 && kills % 15 === 0) { 
-            level++;
-            levelBoard.innerText = `LV: ${level}`;
-            
-            enemySpeed += 1.0; 
-            spawnIntervalTime = Math.max(700, spawnIntervalTime - 200); 
-
-            levelUpText.style.opacity = 1;
-            setTimeout(() => { levelUpText.style.opacity = 0; }, 1000);
-
-            clearInterval(gameInterval);
-            clearInterval(musicInterval);
-            gameInterval = setInterval(spawnEnemy, spawnIntervalTime);
-            // 音樂節拍維持跟敵人生成同步
-            musicInterval = setInterval(playMusicBeat, spawnIntervalTime / 4);
-        }
-    }
-
-    // ==== 控制與繪圖 ====
+    // ==== 控制與主迴圈 ====
     window.addEventListener('keydown', (e) => {
         if (!isGameOver && startScreen.style.display === 'none') {
             if (e.key === 'ArrowLeft') triggerAttack('left');
@@ -294,8 +265,7 @@
     });
     
     ['btnLeft', 'btnRight'].forEach(id => {
-        const btn = document.getElementById(id);
-        const side = id === 'btnLeft' ? 'left' : 'right';
+        const btn = document.getElementById(id); const side = id === 'btnLeft' ? 'left' : 'right';
         btn.addEventListener('touchstart', (e) => { e.preventDefault(); triggerAttack(side); });
         btn.addEventListener('mousedown', (e) => { e.preventDefault(); triggerAttack(side); });
     });
@@ -304,86 +274,50 @@
         if (isGameOver) return;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 畫出打擊區
         ctx.fillStyle = 'rgba(0, 255, 0, 0.15)';
         ctx.fillRect(hitZoneLeft.x, player.y - 30, hitZoneLeft.width, 60);
         ctx.fillRect(hitZoneRight.x, player.y - 30, hitZoneRight.width, 60);
 
-        // 畫出拔刀動畫
         if (player.attackTimer > 0) {
-            ctx.save();
-            ctx.translate(player.x, player.y);
+            ctx.save(); ctx.translate(player.x, player.y);
             if (player.attackSide === 'left') ctx.scale(-1, 1); 
             let progress = 1 - (player.attackTimer / 15);
             ctx.rotate(-Math.PI / 3 + (progress * Math.PI / 1.5));
             ctx.fillStyle = '#fff'; ctx.fillRect(15, -4, 60, 8);
             ctx.beginPath(); ctx.arc(0, 0, 50, -Math.PI / 3, -Math.PI / 3 + (progress * Math.PI / 1.5));
             ctx.strokeStyle = `rgba(0, 210, 255, ${1 - progress})`; ctx.lineWidth = 15; ctx.stroke();
-            ctx.restore();
-            player.attackTimer--; 
+            ctx.restore(); player.attackTimer--; 
         }
 
-        // 畫出玩家
         ctx.fillStyle = player.color;
         ctx.fillRect(player.x - player.size / 2, player.y - player.size / 2, player.size, player.size);
 
-        // 更新與畫出敵人
         for (let i = 0; i < enemies.length; i++) {
-            let e = enemies[i];
-            e.x += e.direction * enemySpeed;
-            
-            ctx.fillStyle = '#ff003c';
-            ctx.shadowBlur = 10; ctx.shadowColor = '#ff003c';
-            ctx.fillRect(e.x, e.y, enemySize, enemySize);
-            ctx.shadowBlur = 0;
+            let e = enemies[i]; e.x += e.direction * enemySpeed;
+            ctx.fillStyle = '#ff003c'; ctx.shadowBlur = 10; ctx.shadowColor = '#ff003c';
+            ctx.fillRect(e.x, e.y, enemySize, enemySize); ctx.shadowBlur = 0;
 
-            // 漏接敵人扣血！
             if ((e.side === 'left' && e.x > player.x) || (e.side === 'right' && e.x < player.x)) {
-                enemies.splice(i, 1);
-                hp--;
-                playSound('hurt'); // 播放受傷音效
-                updateHP();
-                
-                // 畫面震動特效 (紅色閃光)
-                ctx.fillStyle = 'rgba(255, 0, 60, 0.3)';
-                ctx.fillRect(0, 0, canvas.width, canvas.height);
-                i--;
+                enemies.splice(i, 1); hp--; playSound('hurt'); updateHP();
+                ctx.fillStyle = 'rgba(255, 0, 60, 0.3)'; ctx.fillRect(0, 0, canvas.width, canvas.height); i--;
             }
         }
         animationId = requestAnimationFrame(gameLoop);
     }
 
     function startGame(deviceType) {
-        currentDevice = deviceType;
-        startScreen.style.display = 'none';
-        gameOverScreen.style.display = 'none';
+        currentDevice = deviceType; startScreen.style.display = 'none'; gameOverScreen.style.display = 'none';
         if (audioCtx.state === 'suspended') audioCtx.resume();
-        if (deviceType === 'mobile' || deviceType === 'tablet') {
-            touchControls.style.display = 'flex';
-        }
+        if (deviceType === 'mobile' || deviceType === 'tablet') document.getElementById('touchControls').style.display = 'flex';
 
-        // 重置所有變數
-        score = 0; level = 1; kills = 0; hp = 3; isGameOver = false;
-        enemySpeed = 3; spawnIntervalTime = 1800; noteStep = 0;
-        enemies = [];
-        
-        scoreBoard.innerText = `SCORE: ${score}`;
-        levelBoard.innerText = `LV: ${level}`;
-        updateHP();
-        
-        clearInterval(gameInterval);
-        clearInterval(musicInterval);
+        score = 0; level = 1; kills = 0; hp = 3; isGameOver = false; noteStep = 0; enemies = [];
+        scoreBoard.innerText = `SCORE: ${score}`; updateHP();
         cancelAnimationFrame(animationId);
         
-        // 啟動排程 (音樂節拍是敵人生成的 1/4 時間，這樣音樂聽起來比較緊湊)
-        gameInterval = setInterval(spawnEnemy, spawnIntervalTime); 
-        musicInterval = setInterval(playMusicBeat, spawnIntervalTime / 4); 
+        applyLevel(1); // 直接套用第一關的劇本開始遊戲！
         gameLoop(); 
     }
-
-    function restartGame() {
-        startGame(currentDevice);
-    }
+    function restartGame() { startGame(currentDevice); }
 </script>
 </body>
 </html>
