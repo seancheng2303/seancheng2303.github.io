@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>簡易版 Candy Crush (支援平板)</title>
+    <title>簡易版 Candy Crush (全套道具版)</title>
     <style>
         body {
             display: flex;
@@ -13,7 +13,6 @@
             margin: 0;
             background-color: #fce4ec;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            /* 防止網頁在觸控時有奇怪的彈性滾動 */
             overscroll-behavior: none; 
         }
 
@@ -23,11 +22,52 @@
             align-items: center;
         }
 
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 400px;
+            margin-bottom: 10px;
+        }
+
         .score-board {
             font-size: 24px;
             font-weight: bold;
-            margin-bottom: 20px;
             color: #d81b60;
+        }
+
+        /* 道具區塊樣式：改為兩排以容納更多按鈕 */
+        .props-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: flex-end;
+            max-width: 280px;
+        }
+
+        .prop-btn {
+            background-color: #fff;
+            border: 2px solid #f06292;
+            border-radius: 8px;
+            padding: 6px 10px;
+            font-size: 14px;
+            cursor: pointer;
+            font-weight: bold;
+            color: #d81b60;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: all 0.2s;
+        }
+
+        .prop-btn:active {
+            transform: scale(0.95);
+        }
+
+        /* 道具啟用時的特殊樣式 */
+        .prop-active {
+            background-color: #ffb74d !important;
+            border-color: #f57c00 !important;
+            color: white;
+            box-shadow: 0 0 10px #ffb74d;
         }
 
         .grid {
@@ -40,6 +80,7 @@
             border-radius: 10px;
             padding: 5px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: cursor 0.2s;
         }
 
         .grid div {
@@ -50,8 +91,6 @@
             box-sizing: border-box;
             border: 2px solid transparent;
             transition: transform 0.1s;
-            
-            /* 【重要新增】防止平板滑動糖果時觸發網頁滾動或選取文字 */
             touch-action: none;
             user-select: none;
             -webkit-user-select: none;
@@ -62,24 +101,30 @@
             border-color: rgba(0,0,0,0.2);
         }
 
-        /* 針對小螢幕平板/手機的響應式縮放 */
         @media (max-width: 450px) {
-            .grid {
-                width: 320px;
-                height: 320px;
-            }
-            .grid div {
-                width: 40px;
-                height: 40px;
-            }
+            .header { width: 320px; }
+            .grid { width: 320px; height: 320px; }
+            .grid div { width: 40px; height: 40px; }
+            .props-container { max-width: 200px; }
+            .prop-btn { font-size: 12px; padding: 4px 6px; }
         }
     </style>
 </head>
 <body>
 
     <div class="game-container">
-        <div class="score-board">分數: <span id="score">0</span></div>
-        <div class="grid"></div>
+        <div class="header">
+            <div class="score-board">分數: <span id="score">0</span></div>
+            <div class="props-container">
+                <button id="hammer-btn" class="prop-btn">🔨 敲擊</button>
+                <button id="shuffle-btn" class="prop-btn">🔀 洗牌</button>
+                <button id="striped-btn" class="prop-btn">🚀 十字</button>
+                <button id="wrapped-btn" class="prop-btn">💣 範圍</button>
+                <button id="color-btn" class="prop-btn">🌈 彩色</button>
+            </div>
+        </div>
+        
+        <div class="grid" id="game-grid"></div>
     </div>
 
     <script>
@@ -92,6 +137,48 @@
 
             const candyColors = ['#ef5350', '#ffee58', '#ffa726', '#ab47bc', '#66bb6a', '#29b6f6'];
 
+            // === 道具系統狀態管理 ===
+            let activeProp = null; // 記錄目前啟用哪個道具: 'hammer', 'striped', 'wrapped', 'color'
+
+            const propButtons = {
+                'hammer': document.getElementById('hammer-btn'),
+                'striped': document.getElementById('striped-btn'),
+                'wrapped': document.getElementById('wrapped-btn'),
+                'color': document.getElementById('color-btn')
+            };
+
+            // 處理道具按鈕切換邏輯
+            function toggleProp(propName) {
+                // 如果點擊的是已經啟用的道具，就取消它
+                if (activeProp === propName) {
+                    activeProp = null;
+                    propButtons[propName].classList.remove('prop-active');
+                    grid.style.cursor = 'default';
+                } else {
+                    // 先取消其他所有的道具
+                    Object.values(propButtons).forEach(btn => btn.classList.remove('prop-active'));
+                    // 啟用新道具
+                    activeProp = propName;
+                    propButtons[propName].classList.add('prop-active');
+                    grid.style.cursor = 'crosshair';
+                }
+            }
+
+            propButtons['hammer'].addEventListener('click', () => toggleProp('hammer'));
+            propButtons['striped'].addEventListener('click', () => toggleProp('striped'));
+            propButtons['wrapped'].addEventListener('click', () => toggleProp('wrapped'));
+            propButtons['color'].addEventListener('click', () => toggleProp('color'));
+
+            // 洗牌道具 (獨立運作，不需要點擊糖果)
+            document.getElementById('shuffle-btn').addEventListener('click', () => {
+                let currentColors = squares.map(sq => sq.style.backgroundColor);
+                currentColors.sort(() => Math.random() - 0.5);
+                squares.forEach((sq, i) => sq.style.backgroundColor = currentColors[i]);
+                activeProp = null;
+                Object.values(propButtons).forEach(btn => btn.classList.remove('prop-active'));
+                grid.style.cursor = 'default';
+            });
+
             // 1. 建立遊戲棋盤
             function createBoard() {
                 for (let i = 0; i < width * width; i++) {
@@ -100,18 +187,71 @@
                     square.setAttribute('id', i);
                     let randomColor = Math.floor(Math.random() * candyColors.length);
                     square.style.backgroundColor = candyColors[randomColor];
+                    
+                    // 點擊事件：根據啟用的道具執行不同效果
+                    square.addEventListener('click', function() {
+                        if (!activeProp) return; // 沒有啟用道具就不做事
+
+                        const id = parseInt(this.id);
+                        const row = Math.floor(id / width);
+                        const col = id % width;
+                        const targetColor = this.style.backgroundColor;
+
+                        if (activeProp === 'hammer') {
+                            this.style.backgroundColor = '';
+                            score += 5;
+                        } 
+                        else if (activeProp === 'striped') {
+                            // 十字炸彈：消除整行與整列
+                            squares.forEach((sq, index) => {
+                                if (Math.floor(index / width) === row || index % width === col) {
+                                    sq.style.backgroundColor = '';
+                                    score += 2;
+                                }
+                            });
+                        }
+                        else if (activeProp === 'wrapped') {
+                            // 範圍炸彈：消除 3x3 九宮格
+                            for (let r = row - 1; r <= row + 1; r++) {
+                                for (let c = col - 1; c <= col + 1; c++) {
+                                    // 確保不會越界 (牆壁防呆)
+                                    if (r >= 0 && r < width && c >= 0 && c < width) {
+                                        let targetId = r * width + c;
+                                        squares[targetId].style.backgroundColor = '';
+                                        score += 3;
+                                    }
+                                }
+                            }
+                        }
+                        else if (activeProp === 'color') {
+                            // 彩色巧克力：消除畫面上所有同色糖果
+                            if (targetColor !== '') { // 點擊空白無效
+                                squares.forEach(sq => {
+                                    if (sq.style.backgroundColor === targetColor) {
+                                        sq.style.backgroundColor = '';
+                                        score += 5;
+                                    }
+                                });
+                            }
+                        }
+
+                        // 更新分數並重置道具狀態
+                        scoreDisplay.innerHTML = score;
+                        propButtons[activeProp].classList.remove('prop-active');
+                        activeProp = null;
+                        grid.style.cursor = 'default';
+                    });
+
                     grid.appendChild(square);
                     squares.push(square);
                 }
             }
             createBoard();
 
-            let colorBeingDragged;
-            let colorBeingReplaced;
-            let squareIdBeingDragged;
-            let squareIdBeingReplaced;
+            // === 拖曳與觸控邏輯 ===
+            let colorBeingDragged, colorBeingReplaced;
+            let squareIdBeingDragged, squareIdBeingReplaced;
 
-            // --- 滑鼠事件 (原本的) ---
             squares.forEach(square => square.addEventListener('dragstart', dragStart));
             squares.forEach(square => square.addEventListener('dragend', dragEnd));
             squares.forEach(square => square.addEventListener('dragover', e => e.preventDefault()));
@@ -119,11 +259,13 @@
             squares.forEach(square => square.addEventListener('drop', dragDrop));
 
             function dragStart() {
+                if (activeProp) return;
                 colorBeingDragged = this.style.backgroundColor;
                 squareIdBeingDragged = parseInt(this.id);
             }
 
             function dragDrop() {
+                if (activeProp) return;
                 colorBeingReplaced = this.style.backgroundColor;
                 squareIdBeingReplaced = parseInt(this.id);
                 squares[squareIdBeingDragged].style.backgroundColor = colorBeingReplaced;
@@ -131,18 +273,17 @@
             }
 
             function dragEnd() {
+                if (activeProp) return;
                 validateMove();
             }
 
-            // --- 平板/手機觸控事件 (新增) ---
-            let touchStartX = 0;
-            let touchStartY = 0;
-
+            // 觸控邏輯
+            let touchStartX = 0, touchStartY = 0;
             squares.forEach(square => square.addEventListener('touchstart', handleTouchStart, {passive: false}));
             squares.forEach(square => square.addEventListener('touchend', handleTouchEnd));
 
             function handleTouchStart(e) {
-                // 記錄手指按下的起始座標
+                if (activeProp) return;
                 touchStartX = e.changedTouches[0].clientX;
                 touchStartY = e.changedTouches[0].clientY;
                 squareIdBeingDragged = parseInt(this.id);
@@ -150,81 +291,52 @@
             }
 
             function handleTouchEnd(e) {
-                if (squareIdBeingDragged === null) return;
+                if (activeProp || squareIdBeingDragged === null) return;
+                let diffX = e.changedTouches[0].clientX - touchStartX;
+                let diffY = e.changedTouches[0].clientY - touchStartY;
 
-                // 記錄手指離開的座標
-                let touchEndX = e.changedTouches[0].clientX;
-                let touchEndY = e.changedTouches[0].clientY;
-
-                let diffX = touchEndX - touchStartX;
-                let diffY = touchEndY - touchStartY;
-
-                // 防呆：如果滑動距離太短，視為誤觸，不予理會
                 if (Math.abs(diffX) < 20 && Math.abs(diffY) < 20) return;
 
-                // 判斷是橫向還是直向滑動
                 if (Math.abs(diffX) > Math.abs(diffY)) {
-                    // 橫向滑動
-                    if (diffX > 0) squareIdBeingReplaced = squareIdBeingDragged + 1; // 右
-                    else squareIdBeingReplaced = squareIdBeingDragged - 1; // 左
+                    squareIdBeingReplaced = diffX > 0 ? squareIdBeingDragged + 1 : squareIdBeingDragged - 1; 
                 } else {
-                    // 直向滑動
-                    if (diffY > 0) squareIdBeingReplaced = squareIdBeingDragged + width; // 下
-                    else squareIdBeingReplaced = squareIdBeingDragged - width; // 上
+                    squareIdBeingReplaced = diffY > 0 ? squareIdBeingDragged + width : squareIdBeingDragged - width; 
                 }
 
-                // 防止在左右邊界產生不合理的跨列交換
-                const isRightEdge = squareIdBeingDragged % width === width - 1;
-                const isLeftEdge = squareIdBeingDragged % width === 0;
+                if ((squareIdBeingDragged % width === width - 1 && squareIdBeingReplaced === squareIdBeingDragged + 1) ||
+                    (squareIdBeingDragged % width === 0 && squareIdBeingReplaced === squareIdBeingDragged - 1) ||
+                    squareIdBeingReplaced < 0 || squareIdBeingReplaced >= width * width) return;
 
-                if ((isRightEdge && squareIdBeingReplaced === squareIdBeingDragged + 1) ||
-                    (isLeftEdge && squareIdBeingReplaced === squareIdBeingDragged - 1) ||
-                    squareIdBeingReplaced < 0 || squareIdBeingReplaced >= width * width) {
-                    return; // 越界，不執行
-                }
-
-                // 執行交換
                 colorBeingReplaced = squares[squareIdBeingReplaced].style.backgroundColor;
                 squares[squareIdBeingDragged].style.backgroundColor = colorBeingReplaced;
                 squares[squareIdBeingReplaced].style.backgroundColor = colorBeingDragged;
-
                 validateMove();
             }
 
-            // --- 統整的驗證交換邏輯 ---
             function validateMove() {
                 let validMoves = [
-                    squareIdBeingDragged - 1,
-                    squareIdBeingDragged - width,
-                    squareIdBeingDragged + 1,
-                    squareIdBeingDragged + width
+                    squareIdBeingDragged - 1, squareIdBeingDragged - width,
+                    squareIdBeingDragged + 1, squareIdBeingDragged + width
                 ];
-                let validMove = validMoves.includes(squareIdBeingReplaced);
-
-                if (squareIdBeingReplaced !== null && validMove) {
+                if (squareIdBeingReplaced !== null && validMoves.includes(squareIdBeingReplaced)) {
                     squareIdBeingReplaced = null;
-                } else if (squareIdBeingReplaced !== null && !validMove) {
+                } else if (squareIdBeingReplaced !== null) {
                     squares[squareIdBeingReplaced].style.backgroundColor = colorBeingReplaced;
                     squares[squareIdBeingDragged].style.backgroundColor = colorBeingDragged;
                 }
             }
 
-            // 3. 檢查消除邏輯
+            // === 消除與掉落邏輯 ===
             function checkRowForThree() {
                 for (let i = 0; i < 62; i++) {
                     let rowOfThree = [i, i + 1, i + 2];
                     let decidedColor = squares[i].style.backgroundColor;
-                    const isBlank = squares[i].style.backgroundColor === '';
-                    
-                    const notValid = [6, 7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55];
-                    if (notValid.includes(i)) continue;
+                    if ([6, 7, 14, 15, 22, 23, 30, 31, 38, 39, 46, 47, 54, 55].includes(i)) continue;
 
-                    if (rowOfThree.every(index => squares[index].style.backgroundColor === decidedColor && !isBlank)) {
+                    if (decidedColor !== '' && rowOfThree.every(index => squares[index].style.backgroundColor === decidedColor)) {
                         score += 3;
                         scoreDisplay.innerHTML = score;
-                        rowOfThree.forEach(index => {
-                            squares[index].style.backgroundColor = '';
-                        });
+                        rowOfThree.forEach(index => squares[index].style.backgroundColor = '');
                     }
                 }
             }
@@ -233,30 +345,23 @@
                 for (let i = 0; i < 48; i++) {
                     let columnOfThree = [i, i + width, i + width * 2];
                     let decidedColor = squares[i].style.backgroundColor;
-                    const isBlank = squares[i].style.backgroundColor === '';
 
-                    if (columnOfThree.every(index => squares[index].style.backgroundColor === decidedColor && !isBlank)) {
+                    if (decidedColor !== '' && columnOfThree.every(index => squares[index].style.backgroundColor === decidedColor)) {
                         score += 3;
                         scoreDisplay.innerHTML = score;
-                        columnOfThree.forEach(index => {
-                            squares[index].style.backgroundColor = '';
-                        });
+                        columnOfThree.forEach(index => squares[index].style.backgroundColor = '');
                     }
                 }
             }
 
-            // 4. 讓糖果掉落補充空位
             function moveDown() {
                 for (let i = 0; i < 56; i++) {
                     if (squares[i + width].style.backgroundColor === '') {
                         squares[i + width].style.backgroundColor = squares[i].style.backgroundColor;
                         squares[i].style.backgroundColor = '';
                     }
-                    const firstRow = [0, 1, 2, 3, 4, 5, 6, 7];
-                    const isFirstRow = firstRow.includes(i);
-                    if (isFirstRow && squares[i].style.backgroundColor === '') {
-                        let randomColor = Math.floor(Math.random() * candyColors.length);
-                        squares[i].style.backgroundColor = candyColors[randomColor];
+                    if (i < 8 && squares[i].style.backgroundColor === '') {
+                        squares[i].style.backgroundColor = candyColors[Math.floor(Math.random() * candyColors.length)];
                     }
                 }
             }
