@@ -3,20 +3,67 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狗狗大戰爭 (Battle Dogs) - Prototype</title>
+    <title>狗狗大戰爭 (Battle Dogs) - 核心原型</title>
     <style>
-        body { margin: 0; padding: 20px; background-color: #f0f0f0; font-family: sans-serif; text-align: center; }
-        #game-container { position: relative; width: 800px; height: 400px; margin: 0 auto; border: 2px solid #333; background-color: #87CEEB; overflow: hidden; }
+        body { 
+            margin: 0; 
+            padding: 20px; 
+            background-color: #f0f0f0; 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+        }
+        h1 { color: #333; }
+        #game-container { 
+            position: relative; 
+            width: 800px; 
+            height: 400px; 
+            margin: 0 auto; 
+            border: 3px solid #333; 
+            background-color: #87CEEB; /* 天空藍背景 */
+            border-radius: 10px;
+            overflow: hidden; 
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
         canvas { display: block; }
-        .ui-bar { width: 800px; margin: 10px auto; display: flex; justify-content: space-between; align-items: center; }
-        button { padding: 10px 15px; font-size: 16px; cursor: pointer; border: 2px solid #333; border-radius: 5px; background-color: #fff; font-weight: bold; }
-        button:disabled { background-color: #ccc; cursor: not-allowed; }
-        #wallet-info { font-size: 18px; font-weight: bold; background: #FFD700; padding: 5px 15px; border-radius: 20px; border: 2px solid #B8860B; }
+        .ui-bar { 
+            width: 800px; 
+            margin: 15px auto; 
+            display: flex; 
+            justify-content: space-between; 
+            align-items: center; 
+        }
+        button { 
+            padding: 10px 15px; 
+            font-size: 16px; 
+            cursor: pointer; 
+            border: 2px solid #333; 
+            border-radius: 8px; 
+            background-color: #fff; 
+            font-weight: bold; 
+            transition: all 0.1s;
+        }
+        button:active { transform: scale(0.95); }
+        button:disabled { 
+            background-color: #ccc; 
+            color: #666;
+            cursor: not-allowed; 
+            border-color: #999;
+            transform: none;
+        }
+        #wallet-info { 
+            font-size: 18px; 
+            font-weight: bold; 
+            background: #FFD700; 
+            padding: 8px 20px; 
+            border-radius: 20px; 
+            border: 2px solid #B8860B; 
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
         
-        /* 動畫特效 */
+        /* 雷射發射時的動畫特效 */
         @keyframes laser-fire {
             0% { background-color: rgba(255, 0, 0, 0); }
-            50% { background-color: rgba(255, 255, 0, 0.8); }
+            50% { background-color: rgba(255, 255, 0, 0.6); }
             100% { background-color: rgba(255, 0, 0, 0); }
         }
         .laser-active { animation: laser-fire 0.5s ease-out; }
@@ -27,7 +74,7 @@
     <h1>🐾 狗狗大戰爭 - 核心戰鬥測試 🐾</h1>
     
     <div class="ui-bar">
-        <div id="wallet-info">💰 0 / 100 (Lv.1)</div>
+        <div id="wallet-info">💰 0 / 200 (Lv.1)</div>
         <button id="btn-upgrade-wallet">🔼 升級錢包 (Cost: 150)</button>
     </div>
 
@@ -40,44 +87,44 @@
         <button id="btn-spawn-sniper">🐕 狙擊狗 ($200)</button>
         <button id="btn-spawn-titan">🦍 巨神狗 ($500)</button>
         <div style="flex-grow: 1;"></div>
-        <button id="btn-laser" style="background-color: #ff4c4c; color: white;">⚡ 雷射砲 (0%)</button>
+        <button id="btn-laser" style="background-color: #ff4c4c; color: white; border-color: #900;">⚡ 雷射砲 (0%)</button>
     </div>
 
 <script>
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
-    // === 遊戲系統狀態 ===
+    // === 遊戲系統狀態 (已修正錢包上限) ===
     const game = {
         money: 0,
-        maxMoney: 100,
+        maxMoney: 200,    // 初始上限 200，確保能存到 150 升級
         walletLevel: 1,
-        moneyRate: 0.5, // 每幀增加的錢
+        moneyRate: 0.5,   // 每幀增加的金錢速度
         laserCharge: 0,
         laserMax: 1000,
         isGameOver: false
     };
 
-    const units = []; // 場上所有單位
+    const units = []; // 儲存場上所有單位
     let lastTime = 0;
 
-    // === 基地設定 ===
+    // === 基地設定 (左方玩家，右方敵軍) ===
     const bases = {
-        player: { x: 50, y: 300, hp: 1000, maxHp: 1000, width: 60, height: 80, color: 'blue', isPlayer: true },
-        enemy:  { x: 700, y: 300, hp: 1500, maxHp: 1500, width: 60, height: 80, color: 'darkred', isPlayer: false }
+        player: { x: 50, y: 320, hp: 1000, maxHp: 1000, width: 60, height: 80, color: '#0052cc', isPlayer: true },
+        enemy:  { x: 690, y: 320, hp: 1500, maxHp: 1500, width: 60, height: 80, color: '#cc0000', isPlayer: false }
     };
 
-    // === 角色圖鑑資料 ===
+    // === 角色圖鑑與數值資料 ===
     const UNIT_DATA = {
-        doge:   { cost: 50, hp: 100, atk: 15, range: 30, speed: 1.5, cd: 2000, color: 'lightblue', width: 20, height: 20 },
-        sniper: { cost: 200, hp: 150, atk: 40, range: 150, speed: 1.0, cd: 5000, color: 'teal', width: 25, height: 30 },
-        titan:  { cost: 500, hp: 800, atk: 100, range: 40, speed: 0.6, cd: 15000, color: 'navy', width: 40, height: 50 },
-        // 敵軍
-        enemy1: { hp: 120, atk: 10, range: 30, speed: -0.8, color: 'red', width: 25, height: 25 },
-        enemyBoss:{ hp: 1000, atk: 50, range: 40, speed: -0.4, color: 'purple', width: 50, height: 60 }
+        doge:   { cost: 50,  hp: 100, atk: 15,  range: 30,  speed: 1.5,  color: '#ffffff', width: 20, height: 20 },
+        sniper: { cost: 200, hp: 150, atk: 40,  range: 150, speed: 1.0,  color: '#00cc66', width: 25, height: 30 },
+        titan:  { cost: 500, hp: 800, atk: 100, range: 40,  speed: 0.6,  color: '#333333', width: 40, height: 50 },
+        // 敵軍資料
+        enemy1:   { hp: 120,  atk: 10, range: 30, speed: -0.8, color: '#ff9999', width: 25, height: 25 },
+        enemyBoss:{ hp: 1000, atk: 50, range: 40, speed: -0.4, color: '#800080', width: 50, height: 60 }
     };
 
-    // === 實體類別 ===
+    // === 實體單位類別 ===
     class Unit {
         constructor(x, y, data, isPlayer) {
             this.x = x;
@@ -92,55 +139,64 @@
             this.color = data.color;
             this.isPlayer = isPlayer;
             this.actionTimer = 0;
-            this.state = 'move'; // move 或 attack
+            this.state = 'move'; 
         }
 
         draw(ctx) {
+            // 畫出角色方塊
             ctx.fillStyle = this.color;
             ctx.fillRect(this.x, this.y, this.width, this.height);
-            // 血條
+            ctx.strokeStyle = '#000';
+            ctx.strokeRect(this.x, this.y, this.width, this.height);
+
+            // 畫出頭頂血條
             ctx.fillStyle = 'red';
             ctx.fillRect(this.x, this.y - 10, this.width, 5);
-            ctx.fillStyle = 'lightgreen';
+            ctx.fillStyle = '#00ff00';
             ctx.fillRect(this.x, this.y - 10, this.width * (this.hp / this.maxHp), 5);
         }
 
         update(deltaTime) {
             if (this.hp <= 0) return;
 
-            // 尋找目標
             let target = this.findTarget();
 
             if (target) {
                 // 進入攻擊狀態
                 this.state = 'attack';
                 this.actionTimer += deltaTime;
-                if (this.actionTimer >= 1000) { // 每秒攻擊一次
+                if (this.actionTimer >= 1000) { // 預設每秒攻擊一次
                     target.hp -= this.atk;
                     this.actionTimer = 0;
                 }
             } else {
-                // 移動
+                // 移動狀態
                 this.state = 'move';
                 this.x += this.speed;
-                this.actionTimer = 0; // 重置攻擊計時
+                this.actionTimer = 0; 
             }
         }
 
         findTarget() {
-            // 檢查是否碰到敵方主堡
+            // 1. 先檢查是否碰到敵方主堡
             const enemyBase = this.isPlayer ? bases.enemy : bases.player;
-            const distToBase = this.isPlayer ? (enemyBase.x - (this.x + this.width)) : (this.x - (enemyBase.x + enemyBase.width));
+            const distToBase = this.isPlayer 
+                ? (enemyBase.x - (this.x + this.width)) 
+                : (this.x - (enemyBase.x + enemyBase.width));
+            
             if (distToBase <= this.range) return enemyBase;
 
-            // 檢查敵方單位
+            // 2. 檢查前方是否有敵軍單位
             let closest = null;
             let minDist = Infinity;
 
             for (let u of units) {
                 if (u.hp <= 0 || u.isPlayer === this.isPlayer) continue;
                 
-                let dist = this.isPlayer ? (u.x - (this.x + this.width)) : (this.x - (u.x + u.width));
+                let dist = this.isPlayer 
+                    ? (u.x - (this.x + this.width)) 
+                    : (this.x - (u.x + u.width));
+                
                 if (dist <= this.range && dist >= 0) {
                     if (dist < minDist) {
                         minDist = dist;
@@ -152,132 +208,166 @@
         }
     }
 
-    // === UI 更新與互動 ===
+    // === UI 綁定與互動邏輯 ===
     const uiMoney = document.getElementById('wallet-info');
     const btnWallet = document.getElementById('btn-upgrade-wallet');
     const btnLaser = document.getElementById('btn-laser');
 
     function updateUI() {
+        // 更新金錢顯示
         uiMoney.innerText = `💰 ${Math.floor(game.money)} / ${game.maxMoney} (Lv.${game.walletLevel})`;
         
-        // 錢包升級按鈕
+        // 更新錢包升級按鈕狀態
         let upgradeCost = game.walletLevel * 150;
         btnWallet.innerText = `🔼 升級錢包 (Cost: ${upgradeCost})`;
         btnWallet.disabled = game.money < upgradeCost;
 
-        // 產兵按鈕狀態
+        // 更新產兵按鈕狀態 (錢不夠就反灰)
         document.getElementById('btn-spawn-doge').disabled = game.money < UNIT_DATA.doge.cost;
         document.getElementById('btn-spawn-sniper').disabled = game.money < UNIT_DATA.sniper.cost;
         document.getElementById('btn-spawn-titan').disabled = game.money < UNIT_DATA.titan.cost;
 
-        // 雷射按鈕
+        // 更新雷射砲按鈕狀態
         let laserPercent = Math.floor((game.laserCharge / game.laserMax) * 100);
         btnLaser.innerText = laserPercent >= 100 ? '⚡ 發射雷射！' : `⚡ 雷射砲 (${laserPercent}%)`;
         btnLaser.disabled = laserPercent < 100;
+        if(laserPercent >= 100) {
+            btnLaser.style.backgroundColor = '#ff0000';
+            btnLaser.style.boxShadow = '0 0 10px red';
+        } else {
+            btnLaser.style.backgroundColor = '#ff4c4c';
+            btnLaser.style.boxShadow = 'none';
+        }
     }
 
-    // 事件監聽器
+    // 點擊升級錢包
     btnWallet.onclick = () => {
         let cost = game.walletLevel * 150;
         if (game.money >= cost) {
             game.money -= cost;
             game.walletLevel++;
-            game.maxMoney += 150;
-            game.moneyRate += 0.2;
+            game.maxMoney += 150; // 上限增加
+            game.moneyRate += 0.2; // 賺錢速度變快
         }
     };
 
+    // 生成單位的共用函數
     function spawnUnit(typeData, isPlayer) {
+        // y 座標設為 320 貼齊地板
         if (isPlayer && game.money >= typeData.cost) {
             game.money -= typeData.cost;
-            units.push(new Unit(bases.player.x + bases.player.width, 300, typeData, true));
+            units.push(new Unit(bases.player.x + bases.player.width, 320, typeData, true));
         } else if (!isPlayer) {
-            units.push(new Unit(bases.enemy.x - typeData.width, 300, typeData, false));
+            units.push(new Unit(bases.enemy.x - typeData.width, 320, typeData, false));
         }
     }
 
+    // 綁定產兵按鈕
     document.getElementById('btn-spawn-doge').onclick = () => spawnUnit(UNIT_DATA.doge, true);
     document.getElementById('btn-spawn-sniper').onclick = () => spawnUnit(UNIT_DATA.sniper, true);
     document.getElementById('btn-spawn-titan').onclick = () => spawnUnit(UNIT_DATA.titan, true);
 
+    // 點擊發射無敵雷射砲
     btnLaser.onclick = () => {
         if (game.laserCharge >= game.laserMax) {
             game.laserCharge = 0;
-            document.getElementById('game-container').classList.add('laser-active');
-            setTimeout(() => document.getElementById('game-container').classList.remove('laser-active'), 500);
+            // 觸發閃爍特效
+            const container = document.getElementById('game-container');
+            container.classList.add('laser-active');
+            setTimeout(() => container.classList.remove('laser-active'), 500);
             
-            // 雷射傷害與強制擊退 (打斷與保命核心)
+            // 全畫面敵軍受傷與強制擊退機制
             units.forEach(u => {
                 if (!u.isPlayer) {
-                    u.hp -= 300;
-                    u.x += 100; // 強制往右擊退
+                    u.hp -= 400; // 巨量傷害
+                    u.x += 120;  // 強制往右擊退，打斷攻擊
                 }
             });
         }
     };
 
-    // === 敵軍自動生成 AI (極簡版) ===
+    // === 敵軍自動生成 AI ===
     let enemyTimer = 0;
     function enemyAI(deltaTime) {
         enemyTimer += deltaTime;
-        if (enemyTimer > 3000) {
+        if (enemyTimer > 2500) { // 每 2.5 秒生出一隻小怪
             spawnUnit(UNIT_DATA.enemy1, false);
             enemyTimer = 0;
-            // 偶爾生成 Boss
-            if (Math.random() < 0.2) spawnUnit(UNIT_DATA.enemyBoss, false);
+            // 15% 機率生成血厚攻高的 Boss
+            if (Math.random() < 0.15) spawnUnit(UNIT_DATA.enemyBoss, false);
         }
     }
 
-    // === 繪製基地 ===
-    function drawBase(base) {
-        ctx.fillStyle = base.color;
-        ctx.fillRect(base.x, base.y - base.height, base.width, base.height);
-        // 血條
-        ctx.fillStyle = 'red';
-        ctx.fillRect(base.x, base.y - base.height - 15, base.width, 10);
-        ctx.fillStyle = 'lightgreen';
-        ctx.fillRect(base.x, base.y - base.height - 15, base.width * (base.hp / base.maxHp), 10);
+    // === 繪製背景與基地 ===
+    function drawEnvironment() {
+        // 畫地板
+        ctx.fillStyle = '#8B4513'; 
+        ctx.fillRect(0, 320, canvas.width, canvas.height - 320);
+        ctx.fillStyle = '#556B2F';
+        ctx.fillRect(0, 320, canvas.width, 10); // 草皮
+
+        // 畫主堡
+        function drawBase(base) {
+            ctx.fillStyle = base.color;
+            ctx.fillRect(base.x, base.y - base.height, base.width, base.height);
+            ctx.strokeStyle = '#000';
+            ctx.strokeRect(base.x, base.y - base.height, base.width, base.height);
+            
+            // 主堡血條
+            ctx.fillStyle = 'red';
+            ctx.fillRect(base.x, base.y - base.height - 15, base.width, 10);
+            ctx.fillStyle = '#00ff00';
+            ctx.fillRect(base.x, base.y - base.height - 15, base.width * (base.hp / base.maxHp), 10);
+        }
+        drawBase(bases.player);
+        drawBase(bases.enemy);
     }
 
-    // === 主遊戲迴圈 ===
+    // === 主遊戲迴圈 (Game Loop) ===
     function gameLoop(timestamp) {
         if (game.isGameOver) return;
         const deltaTime = timestamp - lastTime;
         lastTime = timestamp;
 
+        // 清空畫布
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 系統資源更新
+        // 1. 系統資源隨時間自動增長
         game.money = Math.min(game.money + (game.moneyRate * (deltaTime / 16)), game.maxMoney);
         game.laserCharge = Math.min(game.laserCharge + (1 * (deltaTime / 16)), game.laserMax);
 
+        // 2. 觸發敵方 AI
         enemyAI(deltaTime);
 
-        // 更新與清理單位
+        // 3. 更新與清理陣亡單位 (從後往前遍歷避免陣列錯位)
         for (let i = units.length - 1; i >= 0; i--) {
             units[i].update(deltaTime);
             if (units[i].hp <= 0) units.splice(i, 1);
         }
 
-        // 繪製
-        drawBase(bases.player);
-        drawBase(bases.enemy);
+        // 4. 畫面繪製
+        drawEnvironment();
         units.forEach(u => u.draw(ctx));
-
         updateUI();
 
-        // 勝負判斷
+        // 5. 勝負判斷
         if (bases.player.hp <= 0) {
-            alert("遊戲結束！你的主堡被摧毀了！");
+            drawEnvironment();
+            setTimeout(() => alert("遊戲結束！你的主堡被摧毀了！(F5 重新開始)"), 100);
             game.isGameOver = true;
         } else if (bases.enemy.hp <= 0) {
-            alert("勝利！你推平了敵軍主堡！");
+            drawEnvironment();
+            setTimeout(() => alert("🎉 勝利！你推平了敵軍主堡！(F5 重新開始)"), 100);
             game.isGameOver = true;
         }
 
-        requestAnimationFrame(gameLoop);
+        // 循環呼叫下一幀
+        if (!game.isGameOver) {
+            requestAnimationFrame(gameLoop);
+        }
     }
 
+    // 啟動遊戲
     requestAnimationFrame((time) => {
         lastTime = time;
         gameLoop(time);
