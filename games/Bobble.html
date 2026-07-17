@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>Bubble Shooter</title>
+<style>
+  body { background:#1a1a2e; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; font-family:sans-serif; }
+  canvas { background: linear-gradient(#16213e, #0f3460); border:3px solid #fff; border-radius:8px; }
+  #ui { position:absolute; top:20px; color:#fff; font-size:20px; }
+</style>
+</head>
+<body>
+<div id="ui">分數: <span id="score">0</span></div>
+<canvas id="game" width="480" height="720"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const scoreEl = document.getElementById('score');
+
+const BUBBLE_R = 18;
+const COLS = 12;
+const ROWS = 10;
+const COLORS = ['#ff6b6b','#4ecdc4','#ffe66d','#a29bfe','#ff9f1c'];
+
+let bubbles = [];
+let shooter = { x: canvas.width/2, y: canvas.height - 40, angle: -Math.PI/2 };
+let currentBubble = null;
+let nextBubble = null;
+let score = 0;
+let mouseX = canvas.width/2;
+
+// 1. 初始化泡泡牆
+function init() {
+  bubbles = [];
+  for(let row = 0; row < 5; row++) {
+    for(let col = 0; col < COLS - row%2; col++) {
+      const x = col * BUBBLE_R*2 + (row%2)*BUBBLE_R + BUBBLE_R;
+      const y = row * BUBBLE_R*1.73 + BUBBLE_R;
+      bubbles.push({x, y, color: randomColor(), active: true});
+    }
+  }
+  nextBubble = {color: randomColor()};
+  spawnBubble();
+}
+
+function randomColor() {
+  return COLORS[Math.floor(Math.random()*COLORS.length)];
+}
+
+function spawnBubble() {
+  currentBubble = {...nextBubble, x: shooter.x, y: shooter.y, vx: 0, vy: 0, moving: false};
+  nextBubble = {color: randomColor()};
+}
+
+// 2. 滑鼠控制角度
+canvas.addEventListener('mousemove', e => {
+  const rect = canvas.getBoundingClientRect();
+  mouseX = e.clientX - rect.left;
+  shooter.angle = Math.atan2(shooter.y - canvas.height/2, mouseX - shooter.x);
+});
+
+canvas.addEventListener('click', () => {
+  if(!currentBubble.moving) {
+    const speed = 12;
+    currentBubble.vx = Math.cos(shooter.angle) * speed;
+    currentBubble.vy = Math.sin(shooter.angle) * speed;
+    currentBubble.moving = true;
+  }
+});
+
+// 3. 碰撞檢測
+function distance(a,b) {
+  return Math.hypot(a.x-b.x, a.y-b.y);
+}
+
+function checkCollision(bubble) {
+  for(let b of bubbles) {
+    if(b.active && distance(bubble,b) < BUBBLE_R*2) {
+      return b;
+    }
+  }
+  // 碰到頂部
+  if(bubble.y < BUBBLE_R) return {x: bubble.x, y: BUBBLE_R};
+  return null;
+}
+
+// 4. 消除同色3個以上
+function popBubbles(start) {
+  let toCheck = [start];
+  let group = [];
+  let visited = new Set();
+
+  while(toCheck.length) {
+    let b = toCheck.pop();
+    let key = b.x+','+b.y;
+    if(visited.has(key)) continue;
+    visited.add(key);
+    if(b.color === start.color) {
+      group.push(b);
+      bubbles.forEach(o => {
+        if(o.active && distance(o,b) < BUBBLE_R*2.1) toCheck.push(o);
+      })
+    }
+  }
+
+  if(group.length >= 3) {
+    group.forEach(b => b.active = false);
+    score += group.length * 10;
+    scoreEl.textContent = score;
+    dropFloatingBubbles();
+  }
+}
+
+// 5. 讓沒連到頂部的泡泡掉落
+function dropFloatingBubbles() {
+  let connected = new Set();
+  let queue = bubbles.filter(b => b.active && b.y < BUBBLE_R*2);
+  while(queue.length) {
+    let b = queue.shift();
+    let key = b.x+','+b.y;
+    if(connected.has(key)) continue;
+    connected.add(key);
+    bubbles.forEach(o => {
+      if(o.active && distance(o,b) < BUBBLE_R*2.1) queue.push(o);
+    })
+  }
+  bubbles.forEach(b => {
+    if(b.active &&!connected.has(b.x+','+b.y)) b.active = false;
+  })
+}
+
+// 6. 遊戲主迴圈
+function update() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // 畫已固定的泡泡
+  bubbles.forEach(b => {
+    if(b.active) drawBubble(b.x, b.y, b.color);
+  });
+
+  // 發射中的泡泡
+  if(currentBubble.moving) {
+    currentBubble.x += currentBubble.vx;
+    currentBubble.y += currentBubble.vy;
+
+    // 撞牆反彈
+    if(currentBubble.x < BUBBLE_R || currentBubble.x > canvas.width-BUBBLE_R)
+      currentBubble.vx *=
