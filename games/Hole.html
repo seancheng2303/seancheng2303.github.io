@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Hole.io - 房屋真實傾倒版</title>
+    <title>3D Hole.io - 完全包覆吞噬版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
@@ -43,7 +43,7 @@
 <body>
 
     <div id="menu" class="overlay">
-        <h1>黑洞大作戰 3D：真實傾倒版</h1>
+        <h1>黑洞大作戰 3D：完全包覆版</h1>
         <div class="subtitle">請選擇您的遊玩設備</div>
         <button class="btn" onclick="selectDevice('pc')">💻 電腦 (滑鼠控制)</button>
         <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (搖桿)</button>
@@ -158,13 +158,13 @@
                 let geo, w, h, d, objType;
 
                 if (rand < lvl.smallRatio) { 
-                    w = d = Math.random() * 0.5 + 0.4; h = Math.random() * 2 + 1; // 稍微拉長更像電線桿/路燈
+                    w = d = Math.random() * 0.4 + 0.3; h = Math.random() * 2 + 1; 
                     objType = 'small';
                 } else if (rand < lvl.smallRatio + lvl.medRatio) { 
-                    w = Math.random() * 1.5 + 2; d = Math.random() * 1.5 + 2; h = Math.random() * 3 + 3; // 像透天厝
+                    w = Math.random() * 1.0 + 1.5; d = Math.random() * 1.0 + 1.5; h = Math.random() * 3 + 3; 
                     objType = 'medium';
                 } else { 
-                    w = d = Math.random() * 3 + 4; h = Math.random() * 16 + 12; // 巨大大樓
+                    w = d = Math.random() * 2.5 + 3.5; h = Math.random() * 15 + 12; 
                     objType = 'large';
                 }
 
@@ -181,7 +181,9 @@
                 mesh.receiveShadow = true;
 
                 scene.add(mesh);
-                objects.push({ mesh: mesh, radius: w / 2, type: objType, height: h });
+                // 物理半徑使用長寬外接圓半徑計算，讓包覆感更精確
+                let realRadius = Math.hypot(w, d) / 2;
+                objects.push({ mesh: mesh, radius: realRadius, type: objType, height: h });
             }
 
             document.getElementById('levelName').innerText = lvl.name;
@@ -273,7 +275,6 @@
             window.addEventListener('pointerup', stopL); window.addEventListener('pointercancel', stopL);
         }
 
-        // --- 核心動態渲染迴圈 ---
         function animate() {
             requestAnimationFrame(animate);
             if (!gameActive) {
@@ -294,32 +295,28 @@
             playerHole.position.x = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.x));
             playerHole.position.z = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.z));
 
-            // 【核心修改：3D 物理傾倒與引力揉碎偵測】
+            // --- 核心修改：嚴格的「完全包覆」吞噬判定 ---
             for (let i = objects.length - 1; i >= 0; i--) {
                 let obj = objects[i];
                 let dx = playerHole.position.x - obj.mesh.position.x;
                 let dz = playerHole.position.z - obj.mesh.position.z;
                 let dist = Math.hypot(dx, dz);
 
-                // 進入黑洞半徑，且黑洞大於物體
-                if (dist < playerRadius && playerRadius > obj.radius) {
+                // 【黃金改動點】: 只有當 黑洞半徑 >= 中心距離 + 房屋半徑 時，才啟動傾倒吞噬
+                if (dist + obj.radius <= playerRadius) {
                     
-                    // 1. 計算傾倒軸線 (外積原理)：
-                    // 想像一條從大樓連到黑洞中心的向量，我們要讓大樓朝這個方向倒下
-                    // 垂直於此向量的地面軸線就是：(dz, 0, -dx)
+                    // 計算朝向黑洞中心的傾倒軸
                     let dirX = dx / (dist || 1);
                     let dirZ = dz / (dist || 1);
                     let rotAxis = new THREE.Vector3(dirZ, 0, -dirX).normalize();
                     
-                    // 2. 執行傾倒：每幀朝黑洞方向旋轉 0.06 弧度 (數值越大倒越快)
-                    obj.mesh.rotateOnAxis(rotAxis, 0.06);
+                    // 真實傾倒與縮小擠壓
+                    obj.mesh.rotateOnAxis(rotAxis, 0.08); // 倒塌速度稍微加快增加爽快感
+                    obj.mesh.position.y -= 0.5; 
+                    obj.mesh.scale.multiplyScalar(0.92); 
 
-                    // 3. 引力下沉與體積擠壓特效
-                    obj.mesh.position.y -= 0.4; // 往地底下沉
-                    obj.mesh.scale.multiplyScalar(0.94); // 像被黑洞揉碎一樣等比例縮小
-
-                    // 4. 判定完全被吞噬的臨界點 (高度陷得夠深，或者已經縮小到快看不見)
-                    if (obj.mesh.position.y < -obj.height / 2 || obj.mesh.scale.x < 0.1) {
+                    // 吞噬完成判定
+                    if (obj.mesh.position.y < -obj.height / 2 || obj.mesh.scale.x < 0.05) {
                         scene.remove(obj.mesh);
                         objects.splice(i, 1);
 
@@ -336,7 +333,7 @@
                 }
             }
 
-            // 相機動態縮放跟隨
+            // 相機跟隨
             let targetCamY = 15 + (playerRadius * 3); 
             let targetCamZ = 12 + (playerRadius * 2.5);
             camera.position.x += (playerHole.position.x - camera.position.x) * 0.1;
