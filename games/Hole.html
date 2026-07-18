@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>2D Hole.io Prototype</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden; /* 隱藏捲軸 */
+            background-color: #eceff1; /* 城市街道的底色 */
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            font-family: Arial, sans-serif;
+            color: #333;
+            pointer-events: none; /* 讓滑鼠點擊穿透 UI */
+        }
+        h1 { margin: 0; font-size: 24px; }
+        p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <h1>黑洞大作戰 2D</h1>
+        <p id="scoreText">分數: 0 | 黑洞半徑: 20</p>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreText = document.getElementById('scoreText');
+
+        // 設定畫布與視窗同寬高
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // --- 遊戲變數 ---
+        let score = 0;
+        
+        // 玩家 (黑洞)
+        const player = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 20, // 初始大小
+            color: '#212121'
+        };
+
+        // 地圖上的可吞噬物件 (食物/建築)
+        const objects = [];
+        const objectColors = ['#ff5252', '#448aff', '#69f0ae', '#ffd740', '#e040fb'];
+
+        // 隨機生成物件的函數
+        function spawnObject() {
+            const radius = Math.random() * 40 + 5; // 大小介於 5 到 45 之間
+            objects.push({
+                x: Math.random() * canvas.width,
+                y: Math.random() * canvas.height,
+                radius: radius,
+                color: objectColors[Math.floor(Math.random() * objectColors.length)]
+            });
+        }
+
+        // 初始生成 50 個物件
+        for (let i = 0; i < 50; i++) {
+            spawnObject();
+        }
+
+        // --- 控制系統 ---
+        // 讓黑洞跟隨滑鼠移動
+        window.addEventListener('mousemove', (e) => {
+            player.x = e.clientX;
+            player.y = e.clientY;
+        });
+
+        // 視窗縮放時重新調整畫布
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // --- 核心邏輯與渲染 ---
+        function update() {
+            // 清空畫布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. 繪製並更新地圖物件
+            for (let i = objects.length - 1; i >= 0; i--) {
+                let obj = objects[i];
+
+                // 畫出物件
+                ctx.beginPath();
+                ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
+                ctx.fillStyle = obj.color;
+                ctx.fill();
+                ctx.closePath();
+
+                // 碰撞偵測：計算黑洞中心與物件中心的距離
+                const dx = player.x - obj.x;
+                const dy = player.y - obj.y;
+                const distance = Math.hypot(dx, dy);
+
+                // 判斷是否成功吞噬：距離夠近，且黑洞半徑大於物件半徑
+                if (distance < player.radius && player.radius > obj.radius) {
+                    // 吞噬成功
+                    objects.splice(i, 1); // 移除該物件
+                    score += Math.floor(obj.radius); // 增加分數
+                    player.radius += obj.radius * 0.1; // 黑洞稍微變大 (成長係數)
+                    
+                    // 更新 UI
+                    scoreText.innerText = `分數: ${score} | 黑洞半徑: ${Math.floor(player.radius)}`;
+                    
+                    // 生成新物件補充地圖
+                    spawnObject(); 
+                }
+            }
+
+            // 2. 繪製玩家黑洞
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fillStyle = player.color;
+            
+            // 給黑洞加個外圈發光效果
+            ctx.shadowColor = '#000';
+            ctx.shadowBlur = 15;
+            ctx.fill();
+            ctx.shadowBlur = 0; // 重置陰影避免影響其他物件
+            ctx.closePath();
+
+            // 不斷重複執行遊戲迴圈
+            requestAnimationFrame(update);
+        }
+
+        // 啟動遊戲
+        update();
+    </script>
+</body>
+</html>
