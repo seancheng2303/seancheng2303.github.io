@@ -9,6 +9,10 @@ const menuData = [
     icon: 'fas fa-gamepad',
     submenu: [
       {
+        text: 'hole',
+        link: 'games/Hole.html'
+      },
+      {
         text: '2048',
         link: 'games/2048.html'
       },
@@ -31,10 +35,6 @@ const menuData = [
       {
         text: 'ocean',
         link: 'games/ocean.html'
-      },
-      {
-        text: 'Hole'
-        link: 'games/Hole.html'
       },
       {
         text: 'candy crush',
