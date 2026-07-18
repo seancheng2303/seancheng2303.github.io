@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Hole.io - 完全包覆吞噬版</title>
+    <title>3D Hole.io - 搖桿右置與速度優化版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
@@ -32,8 +32,9 @@
         #timerText { color: #ff5252; }
         #targetText { color: #ffd740; }
 
+        /* 【修改點】虛擬搖桿位置移至右下角 (right: 50px) */
         #joystickBound {
-            position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px;
+            position: absolute; bottom: 50px; right: 50px; width: 120px; height: 120px;
             background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
             border-radius: 50%; display: none; justify-content: center; align-items: center; z-index: 5;
         }
@@ -43,10 +44,10 @@
 <body>
 
     <div id="menu" class="overlay">
-        <h1>黑洞大作戰 3D：大師版</h1>
+        <h1>黑洞大作戰 3D</h1>
         <div class="subtitle">請選擇您的遊玩設備</div>
         <button class="btn" onclick="selectDevice('pc')">💻 電腦 (滑鼠控制)</button>
-        <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (搖桿)</button>
+        <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (右側搖桿)</button>
     </div>
 
     <div id="resultMenu" class="overlay" style="display: none;">
@@ -57,7 +58,7 @@
 
     <div id="ui">
         <h2 id="levelName" style="margin:0; color:#69f0ae;">Level 1</h2>
-        <div class="stat" id="targetText">目標分數: 500</div>
+        <div class="stat" id="targetText">目標分數: 450</div>
         <div class="stat" id="scoreText">目前分數: 0</div>
         <div class="stat" id="timerText">剩餘時間: 60s</div>
     </div>
@@ -65,6 +66,7 @@
     <div id="joystickBound"><div id="joystickStick"></div></div>
 
     <script>
+        // 【修改點】更新三個關卡的過關目標分數 (450, 1000, 2000)
         const LEVELS = [
             { name: "Level 1: 溫馨小城鎮", targetScore: 450, timeLimit: 60, smallRatio: 0.8, medRatio: 0.2, largeRatio: 0.0, totalObjs: 120 },
             { name: "Level 2: 大都會中心", targetScore: 1000, timeLimit: 90, smallRatio: 0.4, medRatio: 0.4, largeRatio: 0.2, totalObjs: 160 },
@@ -181,7 +183,6 @@
                 mesh.receiveShadow = true;
 
                 scene.add(mesh);
-                // 物理半徑使用長寬外接圓半徑計算，讓包覆感更精確
                 let realRadius = Math.hypot(w, d) / 2;
                 objects.push({ mesh: mesh, radius: realRadius, type: objType, height: h });
             }
@@ -283,7 +284,8 @@
             }
 
             let moveX = 0, moveZ = 0;
-            const speed = 0.4;
+            // 【修改點】將速度從 0.4 調慢至 0.18，操作手感更細緻
+            const speed = 0.18; 
 
             if (deviceType === 'pc') {
                 if (Math.hypot(mouseX, mouseZ) > 0.05) { moveX = mouseX * speed * 2; moveZ = mouseZ * speed * 2; }
@@ -295,27 +297,24 @@
             playerHole.position.x = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.x));
             playerHole.position.z = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.z));
 
-            // --- 核心修改：嚴格的「完全包覆」吞噬判定 ---
+            // 完全包覆吞噬與物理傾倒
             for (let i = objects.length - 1; i >= 0; i--) {
                 let obj = objects[i];
                 let dx = playerHole.position.x - obj.mesh.position.x;
                 let dz = playerHole.position.z - obj.mesh.position.z;
                 let dist = Math.hypot(dx, dz);
 
-                // 【黃金改動點】: 只有當 黑洞半徑 >= 中心距離 + 房屋半徑 時，才啟動傾倒吞噬
+                // 完全包覆判定法
                 if (dist + obj.radius <= playerRadius) {
                     
-                    // 計算朝向黑洞中心的傾倒軸
                     let dirX = dx / (dist || 1);
                     let dirZ = dz / (dist || 1);
                     let rotAxis = new THREE.Vector3(dirZ, 0, -dirX).normalize();
                     
-                    // 真實傾倒與縮小擠壓
-                    obj.mesh.rotateOnAxis(rotAxis, 0.08); // 倒塌速度稍微加快增加爽快感
+                    obj.mesh.rotateOnAxis(rotAxis, 0.08); 
                     obj.mesh.position.y -= 0.5; 
                     obj.mesh.scale.multiplyScalar(0.92); 
 
-                    // 吞噬完成判定
                     if (obj.mesh.position.y < -obj.height / 2 || obj.mesh.scale.x < 0.05) {
                         scene.remove(obj.mesh);
                         objects.splice(i, 1);
