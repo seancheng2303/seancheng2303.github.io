@@ -3,240 +3,335 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2D Hole.io - 相機縮放版</title>
+    <title>3D Hole.io Prototype</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #1a1a1a; /* 宇宙/深色背景 */
+            background-color: #111;
+            font-family: Arial, sans-serif;
             touch-action: none;
-            overscroll-behavior: none; 
+            overscroll-behavior: none;
+            user-select: none;
         }
-        canvas {
-            display: block;
+        /* 裝置選擇選單 */
+        #menu {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(20, 20, 20, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            color: white;
         }
+        #menu h1 { font-size: 32px; margin-bottom: 30px; color: #69f0ae; text-shadow: 0 0 10px rgba(105,240,174,0.5); }
+        .btn {
+            padding: 15px 40px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 25px;
+            background: #448aff;
+            color: white;
+            font-weight: bold;
+            transition: 0.2s;
+            width: 250px;
+        }
+        .btn:hover { background: #2979ff; transform: scale(1.05); }
+        
+        /* 遊戲 UI */
         #ui {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            font-family: Arial, sans-serif;
-            color: #fff;
+            top: 20px; left: 20px;
+            color: white;
             pointer-events: none;
+            display: none;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
         }
-        h1 { margin: 0; font-size: 24px; }
-        p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #69f0ae; }
+        #scoreText { font-size: 20px; font-weight: bold; color: #69f0ae; margin: 5px 0 0 0; }
+
+        /* 行動版虛擬搖桿 UI */
+        #joystickBound {
+            position: absolute;
+            bottom: 50px; left: 50px;
+            width: 120px; height: 120px;
+            background: rgba(255,255,255,0.15);
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        #joystickStick {
+            width: 50px; height: 50px;
+            background: rgba(255,255,255,0.6);
+            border-radius: 50%;
+            position: absolute;
+        }
     </style>
 </head>
 <body>
 
-    <div id="ui">
-        <h1>黑洞大作戰 (鏡頭縮放版)</h1>
-        <p id="scoreText">分數: 0 | 黑洞半徑: 20 (等級 1)</p>
+    <div id="menu">
+        <h1>黑洞大作戰 3D</h1>
+        <button class="btn" onclick="initGame('pc')">💻 電腦 (滑鼠控制)</button>
+        <button class="btn" onclick="initGame('mobile')">📱 手機 / 平板 (搖桿)</button>
     </div>
 
-    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        <div style="font-size: 24px; font-weight: bold;">Hole.io 3D</div>
+        <p id="scoreText">分數: 0 | 黑洞半徑: 1.5</p>
+    </div>
+
+    <div id="joystickBound">
+        <div id="joystickStick"></div>
+    </div>
 
     <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
-        const scoreText = document.getElementById('scoreText');
-
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-
-        // --- 遊戲地圖設定 ---
-        const WORLD_WIDTH = 3000;
-        const WORLD_HEIGHT = 3000;
-
-        // --- 遊戲變數 ---
+        let deviceType = 'pc';
+        let scene, camera, renderer;
+        let playerHole;
         let score = 0;
-        
-        // 玩家（座標現在是「世界座標」）
-        const player = {
-            x: WORLD_WIDTH / 2,
-            y: WORLD_HEIGHT / 2,
-            radius: 20, // 實際物理半徑
-            color: '#000000',
-            speed: 6
-        };
-
+        let playerRadius = 1.5; // 3D 世界中的初始半徑
         const objects = [];
-        // 定義不同種類的物件
-        const types = [
-            { name: '行人/路燈', radiusMin: 6, radiusMax: 12, color: '#ff5252' },
-            { name: '小汽車/樹木', radiusMin: 25, radiusMax: 40, color: '#448aff' },
-            { name: '大建築/大樓', radiusMin: 70, radiusMax: 130, color: '#ffd740' }
-        ];
+        const worldSize = 200; // 3D 地圖邊長 (-100 到 100)
 
-        // 隨機生成物件（散落在 3000x3000 的世界中）
-        function spawnObject() {
-            // 隨機決定生成的物件類型（越大的越稀有）
-            const rand = Math.random();
-            let type = types[0]; // 預設小物件
-            if (rand > 0.6 && rand <= 0.9) type = types[1]; // 中物件
-            if (rand > 0.9) type = types[2]; // 大物件
+        // 搖桿變數
+        const joystick = { active: false, oX: 0, oY: 0, cX: 0, cY: 0, maxR: 60, dx: 0, dy: 0 };
+        // 滑鼠控制變數 (PC用)
+        let mouseX = 0, mouseZ = 0;
 
-            const radius = Math.random() * (type.radiusMax - type.radiusMin) + type.radiusMin;
-            objects.push({
-                x: Math.random() * WORLD_WIDTH,
-                y: Math.random() * WORLD_HEIGHT,
-                radius: radius,
-                color: type.color
+        // --- 1. 遊戲初始化入口 ---
+        function initGame(type) {
+            deviceType = type;
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+            
+            if (deviceType === 'mobile') {
+                document.getElementById('joystickBound').style.display = 'flex';
+                setupMobileControls();
+            } else {
+                setupPCControls();
+            }
+
+            build3DWorld();
+            animate();
+        }
+
+        // --- 2. 建立 3D 場景 ---
+        function build3 World() {
+            // 建立場景
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xb0bec5); // 城市灰色天空底色
+
+            // 建立相機 (透視相機)
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+            // 建立渲染器
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true; // 啟用陰影
+            document.body.appendChild(renderer.domElement);
+
+            // 加入燈光
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            dirLight.position.set(40, 100, 20);
+            dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
+            scene.add(dirLight);
+
+            // 建立 3D 地面
+            const floorGeo = new THREE.BoxGeometry(worldSize, 2, worldSize);
+            const floorMat = new THREE.MeshLambertMaterial({ color: 0x757575 });
+            const floor = new THREE.Mesh(floorGeo, floorMat);
+            floor.position.y = -1; // 讓表面剛好在 y=0
+            floor.receiveShadow = true;
+            scene.add(floor);
+
+            // 建立玩家「黑洞」（3D 中用扁平的黑色圓盤表示）
+            const holeGeo = new THREE.RingGeometry(0, 1, 32);
+            const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
+            playerHole = new THREE.Mesh(holeGeo, holeMat);
+            playerHole.rotation.x = Math.PI / 2; // 躺平在地面上
+            playerHole.position.set(0, 0.02, 0); // 微高於地面避免閃爍
+            playerHole.scale.set(playerRadius, playerRadius, 1);
+            scene.add(playerHole);
+
+            // 隨機生成 3D 城市建物
+            const colors = [0xff5252, 0x448aff, 0xffd740, 0x69f0ae, 0xe040fb];
+            for (let i = 0; i < 150; i++) {
+                let type = Math.random();
+                let geo, w, h, d, objType;
+
+                if (type < 0.6) { // 小道具 / 行人 (小方塊)
+                    w = d = Math.random() * 0.6 + 0.4; h = Math.random() * 1 + 0.5;
+                    objType = 'small';
+                } else if (type < 0.9) { // 汽車 / 樹木 (中長方體)
+                    w = Math.random() * 1 + 1.5; d = Math.random() * 1 + 1.5; h = Math.random() * 1.5 + 1;
+                    objType = 'medium';
+                } else { // 摩天大樓 (巨大長方體)
+                    w = d = Math.random() * 4 + 4; h = Math.random() * 15 + 10;
+                    objType = 'large';
+                }
+
+                geo = new THREE.BoxGeometry(w, h, d);
+                const mat = new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] });
+                const mesh = new THREE.Mesh(geo, mat);
+                
+                // 隨機散落，計算物理半徑（用寬度的一半估算）
+                mesh.position.set(
+                    (Math.random() - 0.5) * (worldSize - 20),
+                    h / 2, // 確保底部貼齊地面
+                    (Math.random() - 0.5) * (worldSize - 20)
+                );
+                mesh.castShadow = true;
+                mesh.receiveShadow = true;
+
+                scene.add(mesh);
+                objects.push({ mesh: mesh, radius: w / 2, type: objType, height: h });
+            }
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // --- 3. 控制操作設定 ---
+        function setupPCControls() {
+            // PC 採用滑鼠中心相對位移控制
+            window.addEventListener('mousemove', (e) => {
+                // 計算滑鼠距離螢幕中心的比例 (-1 到 1)
+                mouseX = (e.clientX / window.innerWidth) - 0.5;
+                mouseZ = (e.clientY / window.innerHeight) - 0.5;
             });
         }
 
-        // 初始生成 300 個物件佈滿地圖
-        for (let i = 0; i < 300; i++) spawnObject();
+        function setupMobileControls() {
+            const bound = document.getElementById('joystickBound');
+            const stick = document.getElementById('joystickStick');
+            const rect = bound.getBoundingClientRect();
+            joystick.oX = rect.left + rect.width / 2;
+            joystick.oY = rect.top + rect.height / 2;
 
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        });
+            window.addEventListener('pointerdown', (e) => {
+                // 如果點擊靠近搖桿區域，啟動搖桿
+                if (Math.hypot(e.clientX - joystick.oX, e.clientY - joystick.oY) < 100) {
+                    joystick.active = true;
+                }
+            });
 
-        // --- 虛擬搖桿（依然使用螢幕座標） ---
-        const joystick = {
-            active: false,
-            originX: 0,
-            originY: 0,
-            currentX: 0,
-            currentY: 0,
-            maxRadius: 60
-        };
+            window.addEventListener('pointermove', (e) => {
+                if (!joystick.active) return;
+                let dx = e.clientX - joystick.oX;
+                let dy = e.clientY - joystick.oY;
+                let dist = Math.hypot(dx, dy);
 
-        canvas.addEventListener('pointerdown', (e) => {
-            joystick.active = true;
-            joystick.originX = e.clientX;
-            joystick.originY = e.clientY;
-            joystick.currentX = e.clientX;
-            joystick.currentY = e.clientY;
-        });
-
-        canvas.addEventListener('pointermove', (e) => {
-            if (!joystick.active) return;
-            joystick.currentX = e.clientX;
-            joystick.currentY = e.clientY;
-        });
-
-        const stopJoystick = () => joystick.active = false;
-        canvas.addEventListener('pointerup', stopJoystick);
-        canvas.addEventListener('pointercancel', stopJoystick);
-
-        // --- 核心邏輯與渲染 ---
-        function update() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            // 1. 處理玩家移動 (世界座標)
-            if (joystick.active) {
-                let dx = joystick.currentX - joystick.originX;
-                let dy = joystick.currentY - joystick.originY;
-                let distance = Math.hypot(dx, dy);
-
-                if (distance > joystick.maxRadius) {
-                    const angle = Math.atan2(dy, dx);
-                    dx = Math.cos(angle) * joystick.maxRadius;
-                    dy = Math.sin(angle) * joystick.maxRadius;
-                    joystick.currentX = joystick.originX + dx;
-                    joystick.currentY = joystick.originY + dy;
+                if (dist > joystick.maxR) {
+                    dx = (dx / dist) * joystick.maxR;
+                    dy = (dy / dist) * joystick.maxR;
                 }
 
-                const moveForce = distance > joystick.maxRadius ? 1 : distance / joystick.maxRadius;
-                
-                player.x += (dx / (distance || 1)) * player.speed * moveForce;
-                player.y += (dy / (distance || 1)) * player.speed * moveForce;
+                stick.style.transform = `translate(${dx}px, ${dy}px)`;
+                // 將搖桿數值標準化為 -1 到 1 供移動使用
+                joystick.dx = dx / joystick.maxR;
+                joystick.dy = dy / joystick.maxR;
+            });
 
-                // 限制在 3000x3000 的世界邊界內
-                player.x = Math.max(player.radius, Math.min(WORLD_WIDTH - player.radius, player.x));
-                player.y = Math.max(player.radius, Math.min(WORLD_HEIGHT - player.radius, player.y));
-            }
-
-            // 2. 計算相機縮放比例 (視覺核心)
-            // 數學公式：讓鏡頭隨著半徑變大而均勻拉遠
-            // 使用開根號 (Math.sqrt) 可以讓縮放感更平滑，既有長大的感覺，畫面又放得夠大
-            const zoom = Math.sqrt(20 / player.radius); 
-
-            // 3. 開始繪製「世界空間」 (套用相機矩陣)
-            ctx.save();
-            
-            // 步驟 A: 將畫布中心移到螢幕中央
-            ctx.translate(canvas.width / 2, canvas.height / 2);
-            // 步驟 B: 根據黑洞大小縮放整個世界
-            ctx.scale(zoom, zoom);
-            // 步驟 C: 將鏡頭對準玩家的世界座標
-            ctx.translate(-player.x, -player.y);
-
-            // 【開始繪製世界內的東西】
-            
-            // 繪製世界邊界（城市網格底座）
-            ctx.fillStyle = '#eceff1';
-            ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-            
-            // 繪製邊界線，讓玩家知道哪裡是盡頭
-            ctx.strokeStyle = '#b0bec5';
-            ctx.lineWidth = 10;
-            ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
-
-            // 繪製並更新地圖物件
-            for (let i = objects.length - 1; i >= 0; i--) {
-                let obj = objects[i];
-
-                ctx.beginPath();
-                ctx.arc(obj.x, obj.y, obj.radius, 0, Math.PI * 2);
-                ctx.fillStyle = obj.color;
-                ctx.fill();
-                ctx.closePath();
-
-                // 核心碰撞偵測（在世界座標下計算）
-                const dx = player.x - obj.x;
-                const dy = player.y - obj.y;
-                const distance = Math.hypot(dx, dy);
-
-                // 只有當黑洞半徑大於物件半徑時才能吞噬
-                if (distance < player.radius && player.radius > obj.radius) {
-                    objects.splice(i, 1);
-                    score += Math.floor(obj.radius);
-                    player.radius += obj.radius * 0.08; // 稍微調低成長速度，手感更好
-                    
-                    // 計算當前黑洞等級
-                    const level = Math.floor(player.radius / 20);
-                    scoreText.innerText = `分數: ${score} | 黑洞半徑: ${Math.floor(player.radius)} (等級 ${level})`;
-                    
-                    spawnObject(); 
-                }
-            }
-
-            // 繪製玩家黑洞
-            ctx.beginPath();
-            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
-            ctx.fillStyle = player.color;
-            ctx.fill();
-            ctx.closePath();
-
-            // 恢復畫布狀態，避免相機縮放影響到 UI
-            ctx.restore();
-
-            // 4. 繪製虛擬搖桿 UI (不隨相機縮放，保持在螢幕固定位置)
-            if (joystick.active) {
-                ctx.beginPath();
-                ctx.arc(joystick.originX, joystick.originY, joystick.maxRadius, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-                ctx.lineWidth = 2;
-                ctx.fill();
-                ctx.stroke();
-                ctx.closePath();
-
-                ctx.beginPath();
-                ctx.arc(joystick.currentX, joystick.currentY, 25, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
-                ctx.fill();
-                ctx.closePath();
-            }
-
-            requestAnimationFrame(update);
+            const stopL = () => {
+                joystick.active = false;
+                stick.style.transform = 'translate(0px, 0px)';
+                joystick.dx = 0; joystick.dy = 0;
+            };
+            window.addEventListener('pointerup', stopL);
+            window.addEventListener('pointercancel', stopL);
         }
 
-        update();
+        // --- 4. 遊戲主迴圈 (每秒 60 幀) ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // 4-1. 處理移動邏輯
+            let moveX = 0, moveZ = 0;
+            const speed = 0.4;
+
+            if (deviceType === 'pc') {
+                // 根據滑鼠距離中心的遠近來決定移動速度
+                if (Math.hypot(mouseX, mouseZ) > 0.05) {
+                    moveX = mouseX * speed * 2;
+                    moveZ = mouseZ * speed * 2;
+                }
+            } else if (deviceType === 'mobile' && joystick.active) {
+                moveX = joystick.dx * speed;
+                moveZ = joystick.dy * speed;
+            }
+
+            playerHole.position.x += moveX;
+            playerHole.position.z += moveZ;
+
+            // 限制黑洞不出 3D 世界邊界
+            playerHole.position.x = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.x));
+            playerHole.position.z = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.z));
+
+            // 4-2. 3D 吞噬偵測與「下沉動畫」效果
+            for (let i = objects.length - 1; i >= 0; i--) {
+                let obj = objects[i];
+                
+                // 計算黑洞與 3D 物件在地面 (X-Z 平面) 的距離
+                let dx = playerHole.position.x - obj.mesh.position.x;
+                let dz = playerHole.position.z - obj.mesh.position.z;
+                let dist = Math.hypot(dx, dz);
+
+                // 吞噬條件：距離小於黑洞半徑，且黑洞半徑大於物件的物理半徑
+                if (dist < playerRadius && playerRadius > obj.radius) {
+                    // 視覺特效：讓建築物往地下沉
+                    obj.mesh.position.y -= 0.5;
+
+                    // 當建築物完全沉入地下時，判定吞噬成功並移除
+                    if (obj.mesh.position.y < -obj.height/2) {
+                        scene.remove(obj.mesh);
+                        objects.splice(i, 1);
+
+                        // 加分並讓黑洞變大
+                        score += (obj.type === 'small' ? 10 : obj.type === 'medium' ? 30 : 150);
+                        playerRadius += (obj.type === 'small' ? 0.05 : obj.type === 'medium' ? 0.15 : 0.5);
+                        
+                        // 更新黑洞 3D 尺寸
+                        playerHole.scale.set(playerRadius, playerRadius, 1);
+                        
+                        document.getElementById('scoreText').innerText = 
+                            `分數: ${score} | 黑洞半徑: ${playerRadius.toFixed(1)}`;
+                    }
+                }
+            }
+
+            // 4-3. 3D 動態相機跟隨與拉遠 (隨半徑變大，相機自動抬高)
+            // 基礎高度 15，隨著半徑變大而等比例變高，提供大視野
+            let targetCamY = 15 + (playerRadius * 3); 
+            let targetCamZ = 12 + (playerRadius * 2.5);
+
+            // 讓相機平滑地跟隨黑洞 (Lerp 效果)
+            camera.position.x += (playerHole.position.x - camera.position.x) * 0.1;
+            camera.position.y += ((playerHole.position.y + targetCamY) - camera.position.y) * 0.1;
+            camera.position.z += ((playerHole.position.z + targetCamZ) - camera.position.z) * 0.1;
+            
+            // 讓相機永遠緊緊盯著黑洞的中心點
+            camera.lookAt(playerHole.position);
+
+            // 渲染畫面
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
     </script>
 </body>
 </html>
