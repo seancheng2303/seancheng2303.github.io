@@ -3,14 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Hole.io - 關卡挑戰版</title>
+    <title>3D Hole.io - 房屋真實傾倒版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
             margin: 0; overflow: hidden; background-color: #111;
             font-family: 'Segoe UI', Arial, sans-serif; touch-action: none; overscroll-behavior: none; user-select: none;
         }
-        /* 核心選單與過場 UI */
         .overlay {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(15, 15, 20, 0.95); display: flex; flex-direction: column;
@@ -25,7 +24,6 @@
         }
         .btn:hover { background: #2979ff; transform: scale(1.05); }
         
-        /* 遊戲內即時 UI */
         #ui {
             position: absolute; top: 20px; left: 20px; color: white;
             pointer-events: none; display: none; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 5;
@@ -34,7 +32,6 @@
         #timerText { color: #ff5252; }
         #targetText { color: #ffd740; }
 
-        /* 行動版虛擬搖桿 */
         #joystickBound {
             position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px;
             background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
@@ -46,7 +43,7 @@
 <body>
 
     <div id="menu" class="overlay">
-        <h1>黑洞大作戰 3D：關卡模式</h1>
+        <h1>黑洞大作戰 3D：真實傾倒版</h1>
         <div class="subtitle">請選擇您的遊玩設備</div>
         <button class="btn" onclick="selectDevice('pc')">💻 電腦 (滑鼠控制)</button>
         <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (搖桿)</button>
@@ -68,10 +65,9 @@
     <div id="joystickBound"><div id="joystickStick"></div></div>
 
     <script>
-        // --- 關卡資料庫配置 ---
         const LEVELS = [
-            { name: "Level 1: 溫馨小城鎮", targetScore: 500, timeLimit: 60, smallRatio: 0.9, medRatio: 0.1, largeRatio: 0.0, totalObjs: 120 },
-            { name: "Level 2: 大都會中心", targetScore: 2000, timeLimit: 90, smallRatio: 0.5, medRatio: 0.3, largeRatio: 0.2, totalObjs: 160 },
+            { name: "Level 1: 溫馨小城鎮", targetScore: 500, timeLimit: 60, smallRatio: 0.8, medRatio: 0.2, largeRatio: 0.0, totalObjs: 120 },
+            { name: "Level 2: 大都會中心", targetScore: 2000, timeLimit: 90, smallRatio: 0.4, medRatio: 0.4, largeRatio: 0.2, totalObjs: 160 },
             { name: "Level 3: 摩天大樓陣", targetScore: 6000, timeLimit: 120, smallRatio: 0.1, medRatio: 0.2, largeRatio: 0.7, totalObjs: 200 }
         ];
 
@@ -89,19 +85,13 @@
         const joystick = { active: false, oX: 0, oY: 0, maxR: 60, dx: 0, dy: 0 };
         let mouseX = 0, mouseZ = 0;
 
-        // 步驟一：選擇裝置
         function selectDevice(type) {
             deviceType = type;
             document.getElementById('menu').style.display = 'none';
-            
-            // 初始化 3D 基礎環境（只做一次）
             build3DBase();
-            
-            // 載入當前關卡
             startLevel(0);
         }
 
-        // 建立 3D 舞台基礎
         function build3DBase() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
@@ -120,9 +110,9 @@
             dirLight.shadow.mapSize.height = 2048;
             scene.add(dirLight);
 
-            // 3D 地面
+            // 地面
             const floorGeo = new THREE.BoxGeometry(worldSize, 2, worldSize);
-            const floorMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+            const floorMat = new THREE.MeshLambertMaterial({ color: 0x455a64 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.position.y = -1; 
             floor.receiveShadow = true;
@@ -136,7 +126,6 @@
             playerHole.position.set(0, 0.02, 0); 
             scene.add(playerHole);
 
-            // 綁定輸入控制
             if (deviceType === 'mobile') {
                 document.getElementById('joystickBound').style.display = 'flex';
                 setupMobileControls();
@@ -145,41 +134,37 @@
             }
 
             window.addEventListener('resize', onWindowResize);
-            animate(); // 啟動渲染渲染迴圈
+            animate(); 
         }
 
-        // 啟動指定關卡
         function startLevel(index) {
             currentLevelIndex = index;
             const lvl = LEVELS[currentLevelIndex];
 
-            // 1. 重置遊戲數據
             score = 0;
             playerRadius = 1.5;
             timeLeft = lvl.timeLimit;
             playerHole.position.set(0, 0.02, 0);
             playerHole.scale.set(playerRadius, playerRadius, 1);
 
-            // 2. 清除舊地圖物件
             while(objects.length > 0) {
                 const obj = objects.pop();
                 scene.remove(obj.mesh);
             }
 
-            // 3. 根據關卡設定重新生成物件
             const colors = [0xff5252, 0x448aff, 0xffd740, 0x69f0ae, 0xe040fb];
             for (let i = 0; i < lvl.totalObjs; i++) {
                 let rand = Math.random();
                 let geo, w, h, d, objType;
 
-                if (rand < lvl.smallRatio) { // 小道具
-                    w = d = Math.random() * 0.5 + 0.4; h = Math.random() * 1 + 0.5;
+                if (rand < lvl.smallRatio) { 
+                    w = d = Math.random() * 0.5 + 0.4; h = Math.random() * 2 + 1; // 稍微拉長更像電線桿/路燈
                     objType = 'small';
-                } else if (rand < lvl.smallRatio + lvl.medRatio) { // 中型車輛/樹木
-                    w = Math.random() * 1 + 1.5; d = Math.random() * 1 + 1.5; h = Math.random() * 1.5 + 1;
+                } else if (rand < lvl.smallRatio + lvl.medRatio) { 
+                    w = Math.random() * 1.5 + 2; d = Math.random() * 1.5 + 2; h = Math.random() * 3 + 3; // 像透天厝
                     objType = 'medium';
-                } else { // 巨大大樓
-                    w = d = Math.random() * 3 + 4; h = Math.random() * 16 + 10;
+                } else { 
+                    w = d = Math.random() * 3 + 4; h = Math.random() * 16 + 12; // 巨大大樓
                     objType = 'large';
                 }
 
@@ -199,7 +184,6 @@
                 objects.push({ mesh: mesh, radius: w / 2, type: objType, height: h });
             }
 
-            // 4. 更新 UI 顯示
             document.getElementById('levelName').innerText = lvl.name;
             document.getElementById('targetText').innerText = `目標分數: ${lvl.targetScore}`;
             document.getElementById('scoreText').innerText = `目前分數: 0`;
@@ -208,21 +192,16 @@
             document.getElementById('resultMenu').style.display = 'none';
             document.getElementById('ui').style.display = 'block';
 
-            // 5. 啟動計時器
             clearInterval(timerInterval);
             gameActive = true;
             timerInterval = setInterval(() => {
                 if (!gameActive) return;
                 timeLeft--;
                 document.getElementById('timerText').innerText = `剩餘時間: ${timeLeft}s`;
-                
-                if (timeLeft <= 0) {
-                    endGame(false); // 時間到，判定輸贏
-                }
+                if (timeLeft <= 0) endGame(false);
             }, 1000);
         }
 
-        // 結束關卡判定
         function endGame(reachedTarget) {
             gameActive = false;
             clearInterval(timerInterval);
@@ -236,11 +215,7 @@
             if (isWin) {
                 resultTitle.innerText = "🎉 關卡成功！";
                 resultTitle.style.color = "#69f0ae";
-                if (currentLevelIndex < LEVELS.length - 1) {
-                    resultBtn.innerText = "挑戰下一關";
-                } else {
-                    resultBtn.innerText = "再玩一次 (通關大滿貫)";
-                }
+                resultBtn.innerText = (currentLevelIndex < LEVELS.length - 1) ? "挑戰下一關" : "再玩一次 (通關大滿貫)";
             } else {
                 resultTitle.innerText = "❌ 挑戰失敗！";
                 resultTitle.style.color = "#ff5252";
@@ -252,23 +227,16 @@
             document.getElementById('resultMenu').style.display = 'flex';
         }
 
-        // 結算按鈕觸發事件
         function nextLevelAction() {
-            const lvl = LEVELS[currentLevelIndex];
-            const isWin = score >= lvl.targetScore;
-
-            if (isWin) {
-                // 如果贏了，進到下一關；如果是最後一關，回第一關
+            if (score >= LEVELS[currentLevelIndex].targetScore) {
                 let nextIndex = currentLevelIndex + 1;
                 if (nextIndex >= LEVELS.length) nextIndex = 0;
                 startLevel(nextIndex);
             } else {
-                // 如果輸了，重試當前關卡
                 startLevel(currentLevelIndex);
             }
         }
 
-        // --- 以下為控制與動畫核心邏輯（維持上一版的高手感） ---
         function setupPCControls() {
             window.addEventListener('mousemove', (e) => {
                 mouseX = (e.clientX / window.innerWidth) - 0.5;
@@ -305,10 +273,10 @@
             window.addEventListener('pointerup', stopL); window.addEventListener('pointercancel', stopL);
         }
 
+        // --- 核心動態渲染迴圈 ---
         function animate() {
             requestAnimationFrame(animate);
             if (!gameActive) {
-                // 如果遊戲暫停/結束，只渲染畫面，不更新邏輯
                 renderer.render(scene, camera);
                 return;
             }
@@ -326,15 +294,32 @@
             playerHole.position.x = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.x));
             playerHole.position.z = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.z));
 
-            // 3D 吞噬與下沉
+            // 【核心修改：3D 物理傾倒與引力揉碎偵測】
             for (let i = objects.length - 1; i >= 0; i--) {
                 let obj = objects[i];
-                let dist = Math.hypot(playerHole.position.x - obj.mesh.position.x, playerHole.position.z - obj.mesh.position.z);
+                let dx = playerHole.position.x - obj.mesh.position.x;
+                let dz = playerHole.position.z - obj.mesh.position.z;
+                let dist = Math.hypot(dx, dz);
 
+                // 進入黑洞半徑，且黑洞大於物體
                 if (dist < playerRadius && playerRadius > obj.radius) {
-                    obj.mesh.position.y -= 0.5;
+                    
+                    // 1. 計算傾倒軸線 (外積原理)：
+                    // 想像一條從大樓連到黑洞中心的向量，我們要讓大樓朝這個方向倒下
+                    // 垂直於此向量的地面軸線就是：(dz, 0, -dx)
+                    let dirX = dx / (dist || 1);
+                    let dirZ = dz / (dist || 1);
+                    let rotAxis = new THREE.Vector3(dirZ, 0, -dirX).normalize();
+                    
+                    // 2. 執行傾倒：每幀朝黑洞方向旋轉 0.06 弧度 (數值越大倒越快)
+                    obj.mesh.rotateOnAxis(rotAxis, 0.06);
 
-                    if (obj.mesh.position.y < -obj.height/2) {
+                    // 3. 引力下沉與體積擠壓特效
+                    obj.mesh.position.y -= 0.4; // 往地底下沉
+                    obj.mesh.scale.multiplyScalar(0.94); // 像被黑洞揉碎一樣等比例縮小
+
+                    // 4. 判定完全被吞噬的臨界點 (高度陷得夠深，或者已經縮小到快看不見)
+                    if (obj.mesh.position.y < -obj.height / 2 || obj.mesh.scale.x < 0.1) {
                         scene.remove(obj.mesh);
                         objects.splice(i, 1);
 
@@ -344,7 +329,6 @@
                         
                         document.getElementById('scoreText').innerText = `目前分數: ${score}`;
 
-                        // 檢查即時勝利：如果分數提早達標，直接獲勝
                         if (score >= LEVELS[currentLevelIndex].targetScore) {
                             endGame(true);
                         }
