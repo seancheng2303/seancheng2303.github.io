@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
 <title>2048 — Grid Fix</title>
 <style>
   :root{
@@ -50,6 +50,8 @@
     position:relative;
     box-shadow: 0 8px 24px rgba(0,0,0,.12);
     user-select:none;
+    /* 關鍵：防止手機瀏覽器預設的滑動下拉重整或滾動 */
+    touch-action: none; 
   }
   .grid{
     position:absolute; inset:0; padding: var(--gap);
@@ -103,11 +105,17 @@
   .v512{ background:#edc850; color:#f9f6f2 }
   .v1024{ background:#edc53f; color:#f9f6f2 }
   .v2048{ background:#edc22e; color:#f9f6f2 }
-  @media (max-width:480px){
+  
+  /* 平板與手機的縮放排版 */
+  @media (max-width:520px){
     :root{ --cell-size:72px; --gap:12px; }
-    .tile{ font-size:20px; }
+    .tile{ font-size:22px; }
     #score{ font-size:16px; padding:8px 12px; }
     #restart{ font-size:14px; padding:8px 12px; }
+  }
+  @media (max-width:380px){
+    :root{ --cell-size:60px; --gap:10px; }
+    .tile{ font-size:18px; }
   }
 </style>
 </head>
@@ -121,8 +129,6 @@
 <script>
 (function(){
   const ROOT = document.documentElement;
-  const CELL_SIZE = parseFloat(getComputedStyle(ROOT).getPropertyValue('--cell-size')) || 100;
-  const GAP = parseFloat(getComputedStyle(ROOT).getPropertyValue('--gap')) || 20;
   const SIZE = parseInt(getComputedStyle(ROOT).getPropertyValue('--cells')) || 4;
 
   const game = document.getElementById('game');
@@ -216,7 +222,10 @@
   }
 
   function render(){
-    const cellSize = CELL_SIZE, gap = GAP;
+    // 修改：每次畫畫面時「動態」取得當前 CSS 的方塊大小與間距，避免手機版縮放時座標位移
+    const cellSize = parseFloat(getComputedStyle(ROOT).getPropertyValue('--cell-size')) || 100;
+    const gap = parseFloat(getComputedStyle(ROOT).getPropertyValue('--gap')) || 20;
+    
     const existing = new Map();
     tilesLayer.querySelectorAll('.tile').forEach(el=> existing.set(el.dataset.id, el));
     for(let r=0;r<SIZE;r++){
@@ -252,6 +261,7 @@
     existing.forEach(el => el.remove());
   }
 
+  // 1. 鍵盤事件（保留給桌機）
   window.addEventListener('keydown', e=>{
     const k = e.key.toLowerCase();
     if(['arrowup','w','arrowdown','s','arrowleft','a','arrowright','d'].includes(k)){
@@ -260,6 +270,44 @@
       move(dir);
     }
   }, { passive:false });
+
+  // 2. 觸控事件（新增給手機和平板）
+  let touchStartX = 0;
+  let touchStartY = 0;
+
+  game.addEventListener('touchstart', e => {
+    touchStartX = e.touches[0].clientX;
+    touchStartY = e.touches[0].clientY;
+  }, { passive: true });
+
+  game.addEventListener('touchend', e => {
+    if (!touchStartX || !touchStartY) return;
+
+    let touchEndX = e.changedTouches[0].clientX;
+    let touchEndY = e.changedTouches[0].clientY;
+
+    let dx = touchEndX - touchStartX;
+    let dy = touchEndY - touchStartY;
+
+    // 滑動判定門檻（滑動超過 40 像素才算數，避免太敏感）
+    const threshold = 40; 
+
+    if (Math.abs(dx) > Math.abs(dy)) {
+      // 水平滑動
+      if (Math.abs(dx) > threshold) {
+        move(dx > 0 ? 'right' : 'left');
+      }
+    } else {
+      // 垂直滑動
+      if (Math.abs(dy) > threshold) {
+        move(dy > 0 ? 'down' : 'up');
+      }
+    }
+
+    // 重設座標
+    touchStartX = 0;
+    touchStartY = 0;
+  }, { passive: true });
 
   restartBtn.addEventListener('click', init);
 
