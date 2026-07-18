@@ -3,143 +3,113 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Hole.io Prototype (已修正版)</title>
+    <title>3D Hole.io - 關卡挑戰版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #111;
-            font-family: Arial, sans-serif;
-            touch-action: none;
-            overscroll-behavior: none;
-            user-select: none;
+            margin: 0; overflow: hidden; background-color: #111;
+            font-family: 'Segoe UI', Arial, sans-serif; touch-action: none; overscroll-behavior: none; user-select: none;
         }
-        /* 裝置選擇選單 */
-        #menu {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(20, 20, 20, 0.95);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 10;
-            color: white;
+        /* 核心選單與過場 UI */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(15, 15, 20, 0.95); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; z-index: 10; color: white;
         }
-        #menu h1 { font-size: 32px; margin-bottom: 30px; color: #69f0ae; text-shadow: 0 0 10px rgba(105,240,174,0.5); }
+        h1 { font-size: 36px; margin-bottom: 10px; color: #69f0ae; text-shadow: 0 0 10px rgba(105,240,174,0.3); }
+        .subtitle { font-size: 18px; color: #b0bec5; margin-bottom: 30px; }
         .btn {
-            padding: 15px 40px;
-            font-size: 18px;
-            margin: 10px;
-            cursor: pointer;
-            border: none;
-            border-radius: 25px;
-            background: #448aff;
-            color: white;
-            font-weight: bold;
-            transition: 0.2s;
-            width: 250px;
+            padding: 15px 40px; font-size: 18px; margin: 10px; cursor: pointer;
+            border: none; border-radius: 25px; background: #448aff; color: white;
+            font-weight: bold; transition: 0.2s; width: 260px; box-shadow: 0 4px 15px rgba(68,138,255,0.4);
         }
         .btn:hover { background: #2979ff; transform: scale(1.05); }
         
-        /* 遊戲 UI */
+        /* 遊戲內即時 UI */
         #ui {
-            position: absolute;
-            top: 20px; left: 20px;
-            color: white;
-            pointer-events: none;
-            display: none;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            z-index: 5;
+            position: absolute; top: 20px; left: 20px; color: white;
+            pointer-events: none; display: none; text-shadow: 2px 2px 4px rgba(0,0,0,0.8); z-index: 5;
         }
-        #scoreText { font-size: 20px; font-weight: bold; color: #69f0ae; margin: 5px 0 0 0; }
+        .stat { font-size: 20px; font-weight: bold; margin: 5px 0; }
+        #timerText { color: #ff5252; }
+        #targetText { color: #ffd740; }
 
-        /* 行動版虛擬搖桿 UI */
+        /* 行動版虛擬搖桿 */
         #joystickBound {
-            position: absolute;
-            bottom: 50px; left: 50px;
-            width: 120px; height: 120px;
-            background: rgba(255,255,255,0.15);
-            border: 2px solid rgba(255,255,255,0.3);
-            border-radius: 50%;
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 5;
+            position: absolute; bottom: 50px; left: 50px; width: 120px; height: 120px;
+            background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%; display: none; justify-content: center; align-items: center; z-index: 5;
         }
-        #joystickStick {
-            width: 50px; height: 50px;
-            background: rgba(255,255,255,0.6);
-            border-radius: 50%;
-            position: absolute;
-        }
+        #joystickStick { width: 50px; height: 50px; background: rgba(255,255,255,0.6); border-radius: 50%; position: absolute; }
     </style>
 </head>
 <body>
 
-    <div id="menu">
-        <h1>黑洞大作戰 3D</h1>
-        <button class="btn" onclick="initGame('pc')">💻 電腦 (滑鼠控制)</button>
-        <button class="btn" onclick="initGame('mobile')">📱 手機 / 平板 (搖桿)</button>
+    <div id="menu" class="overlay">
+        <h1>黑洞大作戰 3D：關卡模式</h1>
+        <div class="subtitle">請選擇您的遊玩設備</div>
+        <button class="btn" onclick="selectDevice('pc')">💻 電腦 (滑鼠控制)</button>
+        <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (搖桿)</button>
+    </div>
+
+    <div id="resultMenu" class="overlay" style="display: none;">
+        <h1 id="resultTitle">關卡成功！</h1>
+        <div id="resultDetails" class="subtitle">您的得分：0</div>
+        <button id="resultBtn" class="btn" onclick="nextLevelAction()">下一關</button>
     </div>
 
     <div id="ui">
-        <div style="font-size: 24px; font-weight: bold;">Hole.io 3D</div>
-        <p id="scoreText">分數: 0 | 黑洞半徑: 1.5</p>
+        <h2 id="levelName" style="margin:0; color:#69f0ae;">Level 1</h2>
+        <div class="stat" id="targetText">目標分數: 500</div>
+        <div class="stat" id="scoreText">目前分數: 0</div>
+        <div class="stat" id="timerText">剩餘時間: 60s</div>
     </div>
 
-    <div id="joystickBound">
-        <div id="joystickStick"></div>
-    </div>
+    <div id="joystickBound"><div id="joystickStick"></div></div>
 
     <script>
+        // --- 關卡資料庫配置 ---
+        const LEVELS = [
+            { name: "Level 1: 溫馨小城鎮", targetScore: 500, timeLimit: 60, smallRatio: 0.9, medRatio: 0.1, largeRatio: 0.0, totalObjs: 120 },
+            { name: "Level 2: 大都會中心", targetScore: 2000, timeLimit: 90, smallRatio: 0.5, medRatio: 0.3, largeRatio: 0.2, totalObjs: 160 },
+            { name: "Level 3: 摩天大樓陣", targetScore: 6000, timeLimit: 120, smallRatio: 0.1, medRatio: 0.2, largeRatio: 0.7, totalObjs: 200 }
+        ];
+
+        let currentLevelIndex = 0;
         let deviceType = 'pc';
-        let scene, camera, renderer;
-        let playerHole;
+        let scene, camera, renderer, playerHole;
         let score = 0;
         let playerRadius = 1.5; 
+        let timeLeft = 60;
+        let gameActive = false;
+        let timerInterval;
         const objects = [];
         const worldSize = 200; 
 
-        // 搖桿變數
-        const joystick = { active: false, oX: 0, oY: 0, cX: 0, cY: 0, maxR: 60, dx: 0, dy: 0 };
-        // 滑鼠控制變數 (PC用)
+        const joystick = { active: false, oX: 0, oY: 0, maxR: 60, dx: 0, dy: 0 };
         let mouseX = 0, mouseZ = 0;
 
-        // --- 1. 遊戲初始化入口 ---
-        function initGame(type) {
+        // 步驟一：選擇裝置
+        function selectDevice(type) {
             deviceType = type;
             document.getElementById('menu').style.display = 'none';
-            document.getElementById('ui').style.display = 'block';
             
-            if (deviceType === 'mobile') {
-                document.getElementById('joystickBound').style.display = 'flex';
-                setupMobileControls();
-            } else {
-                setupPCControls();
-            }
-
-            build3DWorld();
-            animate();
+            // 初始化 3D 基礎環境（只做一次）
+            build3DBase();
+            
+            // 載入當前關卡
+            startLevel(0);
         }
 
-        // --- 2. 建立 3D 場景 (此處已修正空格 Bug) ---
-        function build3DWorld() {
-            // 建立場景
+        // 建立 3D 舞台基礎
+        function build3DBase() {
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xb0bec5); 
-
-            // 建立相機
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-
-            // 建立渲染器
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.shadowMap.enabled = true; 
             document.body.appendChild(renderer.domElement);
 
-            // 加入燈光
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
             scene.add(ambientLight);
 
@@ -150,37 +120,66 @@
             dirLight.shadow.mapSize.height = 2048;
             scene.add(dirLight);
 
-            // 建立 3D 地面
+            // 3D 地面
             const floorGeo = new THREE.BoxGeometry(worldSize, 2, worldSize);
-            const floorMat = new THREE.MeshLambertMaterial({ color: 0x757575 });
+            const floorMat = new THREE.MeshLambertMaterial({ color: 0x555555 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
             floor.position.y = -1; 
             floor.receiveShadow = true;
             scene.add(floor);
 
-            // 建立玩家「黑洞」
+            // 玩家黑洞
             const holeGeo = new THREE.RingGeometry(0, 1, 32);
             const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
             playerHole = new THREE.Mesh(holeGeo, holeMat);
             playerHole.rotation.x = Math.PI / 2; 
             playerHole.position.set(0, 0.02, 0); 
-            playerHole.scale.set(playerRadius, playerRadius, 1);
             scene.add(playerHole);
 
-            // 隨機生成 3D 城市建物
+            // 綁定輸入控制
+            if (deviceType === 'mobile') {
+                document.getElementById('joystickBound').style.display = 'flex';
+                setupMobileControls();
+            } else {
+                setupPCControls();
+            }
+
+            window.addEventListener('resize', onWindowResize);
+            animate(); // 啟動渲染渲染迴圈
+        }
+
+        // 啟動指定關卡
+        function startLevel(index) {
+            currentLevelIndex = index;
+            const lvl = LEVELS[currentLevelIndex];
+
+            // 1. 重置遊戲數據
+            score = 0;
+            playerRadius = 1.5;
+            timeLeft = lvl.timeLimit;
+            playerHole.position.set(0, 0.02, 0);
+            playerHole.scale.set(playerRadius, playerRadius, 1);
+
+            // 2. 清除舊地圖物件
+            while(objects.length > 0) {
+                const obj = objects.pop();
+                scene.remove(obj.mesh);
+            }
+
+            // 3. 根據關卡設定重新生成物件
             const colors = [0xff5252, 0x448aff, 0xffd740, 0x69f0ae, 0xe040fb];
-            for (let i = 0; i < 150; i++) {
-                let type = Math.random();
+            for (let i = 0; i < lvl.totalObjs; i++) {
+                let rand = Math.random();
                 let geo, w, h, d, objType;
 
-                if (type < 0.6) { 
-                    w = d = Math.random() * 0.6 + 0.4; h = Math.random() * 1 + 0.5;
+                if (rand < lvl.smallRatio) { // 小道具
+                    w = d = Math.random() * 0.5 + 0.4; h = Math.random() * 1 + 0.5;
                     objType = 'small';
-                } else if (type < 0.9) { 
+                } else if (rand < lvl.smallRatio + lvl.medRatio) { // 中型車輛/樹木
                     w = Math.random() * 1 + 1.5; d = Math.random() * 1 + 1.5; h = Math.random() * 1.5 + 1;
                     objType = 'medium';
-                } else { 
-                    w = d = Math.random() * 4 + 4; h = Math.random() * 15 + 10;
+                } else { // 巨大大樓
+                    w = d = Math.random() * 3 + 4; h = Math.random() * 16 + 10;
                     objType = 'large';
                 }
 
@@ -200,10 +199,76 @@
                 objects.push({ mesh: mesh, radius: w / 2, type: objType, height: h });
             }
 
-            window.addEventListener('resize', onWindowResize);
+            // 4. 更新 UI 顯示
+            document.getElementById('levelName').innerText = lvl.name;
+            document.getElementById('targetText').innerText = `目標分數: ${lvl.targetScore}`;
+            document.getElementById('scoreText').innerText = `目前分數: 0`;
+            document.getElementById('timerText').innerText = `剩餘時間: ${timeLeft}s`;
+            
+            document.getElementById('resultMenu').style.display = 'none';
+            document.getElementById('ui').style.display = 'block';
+
+            // 5. 啟動計時器
+            clearInterval(timerInterval);
+            gameActive = true;
+            timerInterval = setInterval(() => {
+                if (!gameActive) return;
+                timeLeft--;
+                document.getElementById('timerText').innerText = `剩餘時間: ${timeLeft}s`;
+                
+                if (timeLeft <= 0) {
+                    endGame(false); // 時間到，判定輸贏
+                }
+            }, 1000);
         }
 
-        // --- 3. 控制操作設定 ---
+        // 結束關卡判定
+        function endGame(reachedTarget) {
+            gameActive = false;
+            clearInterval(timerInterval);
+            
+            const lvl = LEVELS[currentLevelIndex];
+            const isWin = score >= lvl.targetScore || reachedTarget;
+            const resultTitle = document.getElementById('resultTitle');
+            const resultDetails = document.getElementById('resultDetails');
+            const resultBtn = document.getElementById('resultBtn');
+
+            if (isWin) {
+                resultTitle.innerText = "🎉 關卡成功！";
+                resultTitle.style.color = "#69f0ae";
+                if (currentLevelIndex < LEVELS.length - 1) {
+                    resultBtn.innerText = "挑戰下一關";
+                } else {
+                    resultBtn.innerText = "再玩一次 (通關大滿貫)";
+                }
+            } else {
+                resultTitle.innerText = "❌ 挑戰失敗！";
+                resultTitle.style.color = "#ff5252";
+                resultBtn.innerText = "重新挑戰本關";
+            }
+
+            resultDetails.innerText = `最終分數：${score} / 目標分數：${lvl.targetScore}`;
+            document.getElementById('ui').style.display = 'none';
+            document.getElementById('resultMenu').style.display = 'flex';
+        }
+
+        // 結算按鈕觸發事件
+        function nextLevelAction() {
+            const lvl = LEVELS[currentLevelIndex];
+            const isWin = score >= lvl.targetScore;
+
+            if (isWin) {
+                // 如果贏了，進到下一關；如果是最後一關，回第一關
+                let nextIndex = currentLevelIndex + 1;
+                if (nextIndex >= LEVELS.length) nextIndex = 0;
+                startLevel(nextIndex);
+            } else {
+                // 如果輸了，重試當前關卡
+                startLevel(currentLevelIndex);
+            }
+        }
+
+        // --- 以下為控制與動畫核心邏輯（維持上一版的高手感） ---
         function setupPCControls() {
             window.addEventListener('mousemove', (e) => {
                 mouseX = (e.clientX / window.innerWidth) - 0.5;
@@ -214,77 +279,57 @@
         function setupMobileControls() {
             const bound = document.getElementById('joystickBound');
             const stick = document.getElementById('joystickStick');
-            
-            // 確保每次點擊時重新計算搖桿中心點，避免縮放定位失準
-            const updateJoystickOrigin = () => {
+            const updateOrigin = () => {
                 const rect = bound.getBoundingClientRect();
                 joystick.oX = rect.left + rect.width / 2;
                 joystick.oY = rect.top + rect.height / 2;
             };
-            updateJoystickOrigin();
+            updateOrigin();
 
             window.addEventListener('pointerdown', (e) => {
-                updateJoystickOrigin();
-                if (Math.hypot(e.clientX - joystick.oX, e.clientY - joystick.oY) < 100) {
-                    joystick.active = true;
-                }
+                updateOrigin();
+                if (Math.hypot(e.clientX - joystick.oX, e.clientY - joystick.oY) < 100) joystick.active = true;
             });
-
             window.addEventListener('pointermove', (e) => {
                 if (!joystick.active) return;
-                let dx = e.clientX - joystick.oX;
-                let dy = e.clientY - joystick.oY;
+                let dx = e.clientX - joystick.oX; let dy = e.clientY - joystick.oY;
                 let dist = Math.hypot(dx, dy);
-
-                if (dist > joystick.maxR) {
-                    dx = (dx / dist) * joystick.maxR;
-                    dy = (dy / dist) * joystick.maxR;
-                }
-
+                if (dist > joystick.maxR) { dx = (dx / dist) * joystick.maxR; dy = (dy / dist) * joystick.maxR; }
                 stick.style.transform = `translate(${dx}px, ${dy}px)`;
-                joystick.dx = dx / joystick.maxR;
-                joystick.dy = dy / joystick.maxR;
+                joystick.dx = dx / joystick.maxR; joystick.dy = dy / joystick.maxR;
             });
-
             const stopL = () => {
-                joystick.active = false;
-                stick.style.transform = 'translate(0px, 0px)';
+                joystick.active = false; stick.style.transform = 'translate(0px, 0px)';
                 joystick.dx = 0; joystick.dy = 0;
             };
-            window.addEventListener('pointerup', stopL);
-            window.addEventListener('pointercancel', stopL);
+            window.addEventListener('pointerup', stopL); window.addEventListener('pointercancel', stopL);
         }
 
-        // --- 4. 遊戲主迴圈 ---
         function animate() {
             requestAnimationFrame(animate);
+            if (!gameActive) {
+                // 如果遊戲暫停/結束，只渲染畫面，不更新邏輯
+                renderer.render(scene, camera);
+                return;
+            }
 
             let moveX = 0, moveZ = 0;
             const speed = 0.4;
 
             if (deviceType === 'pc') {
-                if (Math.hypot(mouseX, mouseZ) > 0.05) {
-                    moveX = mouseX * speed * 2;
-                    moveZ = mouseZ * speed * 2;
-                }
+                if (Math.hypot(mouseX, mouseZ) > 0.05) { moveX = mouseX * speed * 2; moveZ = mouseZ * speed * 2; }
             } else if (deviceType === 'mobile' && joystick.active) {
-                moveX = joystick.dx * speed;
-                moveZ = joystick.dy * speed;
+                moveX = joystick.dx * speed; moveZ = joystick.dy * speed;
             }
 
-            playerHole.position.x += moveX;
-            playerHole.position.z += moveZ;
-
+            playerHole.position.x += moveX; playerHole.position.z += moveZ;
             playerHole.position.x = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.x));
             playerHole.position.z = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.z));
 
-            // 3D 吞噬與下沉動畫
+            // 3D 吞噬與下沉
             for (let i = objects.length - 1; i >= 0; i--) {
                 let obj = objects[i];
-                
-                let dx = playerHole.position.x - obj.mesh.position.x;
-                let dz = playerHole.position.z - obj.mesh.position.z;
-                let dist = Math.hypot(dx, dz);
+                let dist = Math.hypot(playerHole.position.x - obj.mesh.position.x, playerHole.position.z - obj.mesh.position.z);
 
                 if (dist < playerRadius && playerRadius > obj.radius) {
                     obj.mesh.position.y -= 0.5;
@@ -294,23 +339,25 @@
                         objects.splice(i, 1);
 
                         score += (obj.type === 'small' ? 10 : obj.type === 'medium' ? 30 : 150);
-                        playerRadius += (obj.type === 'small' ? 0.05 : obj.type === 'medium' ? 0.15 : 0.5);
-                        
+                        playerRadius += (obj.type === 'small' ? 0.04 : obj.type === 'medium' ? 0.12 : 0.4);
                         playerHole.scale.set(playerRadius, playerRadius, 1);
-                        document.getElementById('scoreText').innerText = 
-                            `分數: ${score} | 黑洞半徑: ${playerRadius.toFixed(1)}`;
+                        
+                        document.getElementById('scoreText').innerText = `目前分數: ${score}`;
+
+                        // 檢查即時勝利：如果分數提早達標，直接獲勝
+                        if (score >= LEVELS[currentLevelIndex].targetScore) {
+                            endGame(true);
+                        }
                     }
                 }
             }
 
-            // 相機跟隨
+            // 相機動態縮放跟隨
             let targetCamY = 15 + (playerRadius * 3); 
             let targetCamZ = 12 + (playerRadius * 2.5);
-
             camera.position.x += (playerHole.position.x - camera.position.x) * 0.1;
             camera.position.y += ((playerHole.position.y + targetCamY) - camera.position.y) * 0.1;
             camera.position.z += ((playerHole.position.z + targetCamZ) - camera.position.z) * 0.1;
-            
             camera.lookAt(playerHole.position);
 
             renderer.render(scene, camera);
