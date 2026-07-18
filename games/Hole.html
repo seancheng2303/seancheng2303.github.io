@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>2D Hole.io - 搖桿版</title>
+    <title>2D Hole.io - 相機縮放版</title>
     <style>
         body {
             margin: 0;
             overflow: hidden;
-            background-color: #eceff1;
-            /* 防止手機瀏覽器的下拉更新與原生拖曳行為 */
+            background-color: #1a1a1a; /* 宇宙/深色背景 */
             touch-action: none;
             overscroll-behavior: none; 
         }
@@ -21,18 +20,19 @@
             top: 20px;
             left: 20px;
             font-family: Arial, sans-serif;
-            color: #333;
+            color: #fff;
             pointer-events: none;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
         }
         h1 { margin: 0; font-size: 24px; }
-        p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; }
+        p { margin: 5px 0 0 0; font-size: 18px; font-weight: bold; color: #69f0ae; }
     </style>
 </head>
 <body>
 
     <div id="ui">
-        <h1>黑洞大作戰 (行動版)</h1>
-        <p id="scoreText">分數: 0 | 黑洞半徑: 20</p>
+        <h1>黑洞大作戰 (鏡頭縮放版)</h1>
+        <p id="scoreText">分數: 0 | 黑洞半徑: 20 (等級 1)</p>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -45,51 +45,67 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
+        // --- 遊戲地圖設定 ---
+        const WORLD_WIDTH = 3000;
+        const WORLD_HEIGHT = 3000;
+
         // --- 遊戲變數 ---
         let score = 0;
         
+        // 玩家（座標現在是「世界座標」）
         const player = {
-            x: canvas.width / 2,
-            y: canvas.height / 2,
-            radius: 20,
-            color: '#212121',
-            speed: 4 // 黑洞的基礎移動速度
+            x: WORLD_WIDTH / 2,
+            y: WORLD_HEIGHT / 2,
+            radius: 20, // 實際物理半徑
+            color: '#000000',
+            speed: 6
         };
 
         const objects = [];
-        const objectColors = ['#ff5252', '#448aff', '#69f0ae', '#ffd740', '#e040fb'];
+        // 定義不同種類的物件
+        const types = [
+            { name: '行人/路燈', radiusMin: 6, radiusMax: 12, color: '#ff5252' },
+            { name: '小汽車/樹木', radiusMin: 25, radiusMax: 40, color: '#448aff' },
+            { name: '大建築/大樓', radiusMin: 70, radiusMax: 130, color: '#ffd740' }
+        ];
 
+        // 隨機生成物件（散落在 3000x3000 的世界中）
         function spawnObject() {
-            const radius = Math.random() * 40 + 5;
+            // 隨機決定生成的物件類型（越大的越稀有）
+            const rand = Math.random();
+            let type = types[0]; // 預設小物件
+            if (rand > 0.6 && rand <= 0.9) type = types[1]; // 中物件
+            if (rand > 0.9) type = types[2]; // 大物件
+
+            const radius = Math.random() * (type.radiusMax - type.radiusMin) + type.radiusMin;
             objects.push({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
+                x: Math.random() * WORLD_WIDTH,
+                y: Math.random() * WORLD_HEIGHT,
                 radius: radius,
-                color: objectColors[Math.floor(Math.random() * objectColors.length)]
+                color: type.color
             });
         }
 
-        for (let i = 0; i < 50; i++) spawnObject();
+        // 初始生成 300 個物件佈滿地圖
+        for (let i = 0; i < 300; i++) spawnObject();
 
         window.addEventListener('resize', () => {
             canvas.width = window.innerWidth;
             canvas.height = window.innerHeight;
         });
 
-        // --- 虛擬搖桿狀態 ---
+        // --- 虛擬搖桿（依然使用螢幕座標） ---
         const joystick = {
             active: false,
             originX: 0,
             originY: 0,
             currentX: 0,
             currentY: 0,
-            maxRadius: 60 // 搖桿底座的最大半徑
+            maxRadius: 60
         };
 
-        // --- 統一處理滑鼠與觸控事件 (Pointer Events) ---
         canvas.addEventListener('pointerdown', (e) => {
             joystick.active = true;
-            // 記錄按下的起始位置
             joystick.originX = e.clientX;
             joystick.originY = e.clientY;
             joystick.currentX = e.clientX;
@@ -102,7 +118,6 @@
             joystick.currentY = e.clientY;
         });
 
-        // 當手指離開或滑鼠放開時停止搖桿
         const stopJoystick = () => joystick.active = false;
         canvas.addEventListener('pointerup', stopJoystick);
         canvas.addEventListener('pointercancel', stopJoystick);
@@ -111,14 +126,12 @@
         function update() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // 1. 處理搖桿輸入與玩家移動
+            // 1. 處理玩家移動 (世界座標)
             if (joystick.active) {
-                // 計算搖桿推動的距離與角度
                 let dx = joystick.currentX - joystick.originX;
                 let dy = joystick.currentY - joystick.originY;
                 let distance = Math.hypot(dx, dy);
 
-                // 限制搖桿控制點不能超過底盤範圍
                 if (distance > joystick.maxRadius) {
                     const angle = Math.atan2(dy, dx);
                     dx = Math.cos(angle) * joystick.maxRadius;
@@ -127,19 +140,43 @@
                     joystick.currentY = joystick.originY + dy;
                 }
 
-                // 根據搖桿推動的比例來決定移動速度 (推越遠走越快)
                 const moveForce = distance > joystick.maxRadius ? 1 : distance / joystick.maxRadius;
                 
-                // 更新黑洞位置
                 player.x += (dx / (distance || 1)) * player.speed * moveForce;
                 player.y += (dy / (distance || 1)) * player.speed * moveForce;
 
-                // 邊界限制：防止黑洞跑出畫面
-                player.x = Math.max(player.radius, Math.min(canvas.width - player.radius, player.x));
-                player.y = Math.max(player.radius, Math.min(canvas.height - player.radius, player.y));
+                // 限制在 3000x3000 的世界邊界內
+                player.x = Math.max(player.radius, Math.min(WORLD_WIDTH - player.radius, player.x));
+                player.y = Math.max(player.radius, Math.min(WORLD_HEIGHT - player.radius, player.y));
             }
 
-            // 2. 繪製並更新地圖物件
+            // 2. 計算相機縮放比例 (視覺核心)
+            // 數學公式：讓鏡頭隨著半徑變大而均勻拉遠
+            // 使用開根號 (Math.sqrt) 可以讓縮放感更平滑，既有長大的感覺，畫面又放得夠大
+            const zoom = Math.sqrt(20 / player.radius); 
+
+            // 3. 開始繪製「世界空間」 (套用相機矩陣)
+            ctx.save();
+            
+            // 步驟 A: 將畫布中心移到螢幕中央
+            ctx.translate(canvas.width / 2, canvas.height / 2);
+            // 步驟 B: 根據黑洞大小縮放整個世界
+            ctx.scale(zoom, zoom);
+            // 步驟 C: 將鏡頭對準玩家的世界座標
+            ctx.translate(-player.x, -player.y);
+
+            // 【開始繪製世界內的東西】
+            
+            // 繪製世界邊界（城市網格底座）
+            ctx.fillStyle = '#eceff1';
+            ctx.fillRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+            
+            // 繪製邊界線，讓玩家知道哪裡是盡頭
+            ctx.strokeStyle = '#b0bec5';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(0, 0, WORLD_WIDTH, WORLD_HEIGHT);
+
+            // 繪製並更新地圖物件
             for (let i = objects.length - 1; i >= 0; i--) {
                 let obj = objects[i];
 
@@ -149,42 +186,49 @@
                 ctx.fill();
                 ctx.closePath();
 
+                // 核心碰撞偵測（在世界座標下計算）
                 const dx = player.x - obj.x;
                 const dy = player.y - obj.y;
                 const distance = Math.hypot(dx, dy);
 
+                // 只有當黑洞半徑大於物件半徑時才能吞噬
                 if (distance < player.radius && player.radius > obj.radius) {
                     objects.splice(i, 1);
                     score += Math.floor(obj.radius);
-                    player.radius += obj.radius * 0.1;
-                    scoreText.innerText = `分數: ${score} | 黑洞半徑: ${Math.floor(player.radius)}`;
+                    player.radius += obj.radius * 0.08; // 稍微調低成長速度，手感更好
+                    
+                    // 計算當前黑洞等級
+                    const level = Math.floor(player.radius / 20);
+                    scoreText.innerText = `分數: ${score} | 黑洞半徑: ${Math.floor(player.radius)} (等級 ${level})`;
+                    
                     spawnObject(); 
                 }
             }
 
-            // 3. 繪製玩家黑洞
+            // 繪製玩家黑洞
             ctx.beginPath();
             ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
             ctx.fillStyle = player.color;
-            ctx.shadowColor = '#000';
-            ctx.shadowBlur = 15;
             ctx.fill();
-            ctx.shadowBlur = 0;
             ctx.closePath();
 
-            // 4. 繪製虛擬搖桿 UI (覆蓋在最上層)
+            // 恢復畫布狀態，避免相機縮放影響到 UI
+            ctx.restore();
+
+            // 4. 繪製虛擬搖桿 UI (不隨相機縮放，保持在螢幕固定位置)
             if (joystick.active) {
-                // 畫底盤
                 ctx.beginPath();
                 ctx.arc(joystick.originX, joystick.originY, joystick.maxRadius, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(150, 150, 150, 0.3)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+                ctx.lineWidth = 2;
                 ctx.fill();
+                ctx.stroke();
                 ctx.closePath();
 
-                // 畫搖桿控制點
                 ctx.beginPath();
                 ctx.arc(joystick.currentX, joystick.currentY, 25, 0, Math.PI * 2);
-                ctx.fillStyle = 'rgba(100, 100, 100, 0.7)';
+                ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
                 ctx.fill();
                 ctx.closePath();
             }
