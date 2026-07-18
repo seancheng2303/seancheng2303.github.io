@@ -1,149 +1,168 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-<meta charset="UTF-8">
-<title>Bubble Shooter</title>
-<style>
-  body { background:#1a1a2e; display:flex; justify-content:center; align-items:center; height:100vh; margin:0; font-family:sans-serif; }
-  canvas { background: linear-gradient(#16213e, #0f3460); border:3px solid #fff; border-radius:8px; }
-  #ui { position:absolute; top:20px; color:#fff; font-size:20px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JavaScript 泡泡龍基礎版</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #2c3e50;
+        }
+        canvas {
+            background-color: #ecf0f1;
+            border: 4px solid #34495e;
+            border-radius: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
+    </style>
 </head>
 <body>
-<div id="ui">分數: <span id="score">0</span></div>
-<canvas id="game" width="480" height="720"></canvas>
+
+<canvas id="gameCanvas" width="400" height="600"></canvas>
 
 <script>
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-const scoreEl = document.getElementById('score');
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-const BUBBLE_R = 18;
-const COLS = 12;
-const ROWS = 10;
-const COLORS = ['#ff6b6b','#4ecdc4','#ffe66d','#a29bfe','#ff9f1c'];
+    // 遊戲設定
+    const bubbleRadius = 15;
+    const colors = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6'];
+    
+    // 發射器設定
+    const shooter = {
+        x: canvas.width / 2,
+        y: canvas.height - 30,
+        angle: 0
+    };
 
-let bubbles = [];
-let shooter = { x: canvas.width/2, y: canvas.height - 40, angle: -Math.PI/2 };
-let currentBubble = null;
-let nextBubble = null;
-let score = 0;
-let mouseX = canvas.width/2;
+    // 儲存發射出去的泡泡和上方的目標泡泡
+    let projectiles = [];
+    let gridBubbles = [];
 
-// 1. 初始化泡泡牆
-function init() {
-  bubbles = [];
-  for(let row = 0; row < 5; row++) {
-    for(let col = 0; col < COLS - row%2; col++) {
-      const x = col * BUBBLE_R*2 + (row%2)*BUBBLE_R + BUBBLE_R;
-      const y = row * BUBBLE_R*1.73 + BUBBLE_R;
-      bubbles.push({x, y, color: randomColor(), active: true});
+    // 滑鼠游標位置
+    let mouse = { x: canvas.width / 2, y: canvas.height / 2 };
+
+    // 監聽滑鼠移動來瞄準
+    canvas.addEventListener('mousemove', (e) => {
+        const rect = canvas.getBoundingClientRect();
+        mouse.x = e.clientX - rect.left;
+        mouse.y = e.clientY - rect.top;
+        
+        // 計算發射器的角度
+        const dx = mouse.x - shooter.x;
+        const dy = mouse.y - shooter.y;
+        shooter.angle = Math.atan2(dy, dx);
+    });
+
+    // 點擊發射泡泡
+    canvas.addEventListener('click', () => {
+        const speed = 8;
+        const velocity = {
+            x: Math.cos(shooter.angle) * speed,
+            y: Math.sin(shooter.angle) * speed
+        };
+        
+        // 隨機生成一個顏色的泡泡發射
+        const randomColor = colors[Math.floor(Math.random() * colors.length)];
+        
+        projectiles.push({
+            x: shooter.x,
+            y: shooter.y,
+            velocity: velocity,
+            color: randomColor
+        });
+    });
+
+    // 產生一開始的目標泡泡網格
+    function initGrid() {
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 12; col++) {
+                // 簡單的交錯排列計算
+                let x = col * (bubbleRadius * 2 + 2) + bubbleRadius + 15;
+                if (row % 2 !== 0) x += bubbleRadius; 
+                let y = row * (bubbleRadius * 2 - 4) + bubbleRadius + 20;
+                
+                gridBubbles.push({
+                    x: x,
+                    y: y,
+                    color: colors[Math.floor(Math.random() * colors.length)]
+                });
+            }
+        }
     }
-  }
-  nextBubble = {color: randomColor()};
-  spawnBubble();
-}
 
-function randomColor() {
-  return COLORS[Math.floor(Math.random()*COLORS.length)];
-}
-
-function spawnBubble() {
-  currentBubble = {...nextBubble, x: shooter.x, y: shooter.y, vx: 0, vy: 0, moving: false};
-  nextBubble = {color: randomColor()};
-}
-
-// 2. 滑鼠控制角度
-canvas.addEventListener('mousemove', e => {
-  const rect = canvas.getBoundingClientRect();
-  mouseX = e.clientX - rect.left;
-  shooter.angle = Math.atan2(shooter.y - canvas.height/2, mouseX - shooter.x);
-});
-
-canvas.addEventListener('click', () => {
-  if(!currentBubble.moving) {
-    const speed = 12;
-    currentBubble.vx = Math.cos(shooter.angle) * speed;
-    currentBubble.vy = Math.sin(shooter.angle) * speed;
-    currentBubble.moving = true;
-  }
-});
-
-// 3. 碰撞檢測
-function distance(a,b) {
-  return Math.hypot(a.x-b.x, a.y-b.y);
-}
-
-function checkCollision(bubble) {
-  for(let b of bubbles) {
-    if(b.active && distance(bubble,b) < BUBBLE_R*2) {
-      return b;
+    // 繪製泡泡的函數
+    function drawBubble(x, y, color) {
+        ctx.beginPath();
+        ctx.arc(x, y, bubbleRadius, 0, Math.PI * 2);
+        ctx.fillStyle = color;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        ctx.closePath();
     }
-  }
-  // 碰到頂部
-  if(bubble.y < BUBBLE_R) return {x: bubble.x, y: BUBBLE_R};
-  return null;
-}
 
-// 4. 消除同色3個以上
-function popBubbles(start) {
-  let toCheck = [start];
-  let group = [];
-  let visited = new Set();
+    // 遊戲主迴圈
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        // 清除畫布
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  while(toCheck.length) {
-    let b = toCheck.pop();
-    let key = b.x+','+b.y;
-    if(visited.has(key)) continue;
-    visited.add(key);
-    if(b.color === start.color) {
-      group.push(b);
-      bubbles.forEach(o => {
-        if(o.active && distance(o,b) < BUBBLE_R*2.1) toCheck.push(o);
-      })
+        // 1. 畫出上方的泡泡網格
+        gridBubbles.forEach(bubble => {
+            drawBubble(bubble.x, bubble.y, bubble.color);
+        });
+
+        // 2. 更新與畫出發射出去的泡泡
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            let p = projectiles[i];
+            p.x += p.velocity.x;
+            p.y += p.velocity.y;
+
+            // 邊界反彈 (左右牆壁)
+            if (p.x - bubbleRadius < 0 || p.x + bubbleRadius > canvas.width) {
+                p.velocity.x *= -1;
+            }
+
+            drawBubble(p.x, p.y, p.color);
+
+            // 簡單的邊界移除 (打到最頂端時消失，這裡可以改成固定在網格上)
+            if (p.y + bubbleRadius < 0) {
+                projectiles.splice(i, 1);
+            }
+        }
+
+        // 3. 畫出發射器 (瞄準線)
+        ctx.beginPath();
+        ctx.moveTo(shooter.x, shooter.y);
+        ctx.lineTo(
+            shooter.x + Math.cos(shooter.angle) * 40,
+            shooter.y + Math.sin(shooter.angle) * 40
+        );
+        ctx.strokeStyle = '#34495e';
+        ctx.lineWidth = 4;
+        ctx.stroke();
+        ctx.closePath();
+
+        // 畫出發射器底座
+        ctx.beginPath();
+        ctx.arc(shooter.x, shooter.y, 20, 0, Math.PI * 2);
+        ctx.fillStyle = '#7f8c8d';
+        ctx.fill();
+        ctx.closePath();
     }
-  }
 
-  if(group.length >= 3) {
-    group.forEach(b => b.active = false);
-    score += group.length * 10;
-    scoreEl.textContent = score;
-    dropFloatingBubbles();
-  }
-}
+    // 初始化並啟動遊戲
+    initGrid();
+    animate();
+</script>
 
-// 5. 讓沒連到頂部的泡泡掉落
-function dropFloatingBubbles() {
-  let connected = new Set();
-  let queue = bubbles.filter(b => b.active && b.y < BUBBLE_R*2);
-  while(queue.length) {
-    let b = queue.shift();
-    let key = b.x+','+b.y;
-    if(connected.has(key)) continue;
-    connected.add(key);
-    bubbles.forEach(o => {
-      if(o.active && distance(o,b) < BUBBLE_R*2.1) queue.push(o);
-    })
-  }
-  bubbles.forEach(b => {
-    if(b.active &&!connected.has(b.x+','+b.y)) b.active = false;
-  })
-}
-
-// 6. 遊戲主迴圈
-function update() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
-  // 畫已固定的泡泡
-  bubbles.forEach(b => {
-    if(b.active) drawBubble(b.x, b.y, b.color);
-  });
-
-  // 發射中的泡泡
-  if(currentBubble.moving) {
-    currentBubble.x += currentBubble.vx;
-    currentBubble.y += currentBubble.vy;
-
-    // 撞牆反彈
-    if(currentBubble.x < BUBBLE_R || currentBubble.x > canvas.width-BUBBLE_R)
-      currentBubble.vx *=
+</body>
+</html>
