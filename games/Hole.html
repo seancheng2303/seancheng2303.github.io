@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Hole.io Prototype</title>
+    <title>3D Hole.io Prototype (已修正版)</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
@@ -51,6 +51,7 @@
             pointer-events: none;
             display: none;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 5;
         }
         #scoreText { font-size: 20px; font-weight: bold; color: #69f0ae; margin: 5px 0 0 0; }
 
@@ -65,6 +66,7 @@
             display: none;
             justify-content: center;
             align-items: center;
+            z-index: 5;
         }
         #joystickStick {
             width: 50px; height: 50px;
@@ -96,9 +98,9 @@
         let scene, camera, renderer;
         let playerHole;
         let score = 0;
-        let playerRadius = 1.5; // 3D 世界中的初始半徑
+        let playerRadius = 1.5; 
         const objects = [];
-        const worldSize = 200; // 3D 地圖邊長 (-100 到 100)
+        const worldSize = 200; 
 
         // 搖桿變數
         const joystick = { active: false, oX: 0, oY: 0, cX: 0, cY: 0, maxR: 60, dx: 0, dy: 0 };
@@ -122,19 +124,19 @@
             animate();
         }
 
-        // --- 2. 建立 3D 場景 ---
-        function build3 World() {
+        // --- 2. 建立 3D 場景 (此處已修正空格 Bug) ---
+        function build3DWorld() {
             // 建立場景
             scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xb0bec5); // 城市灰色天空底色
+            scene.background = new THREE.Color(0xb0bec5); 
 
-            // 建立相機 (透視相機)
+            // 建立相機
             camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
 
             // 建立渲染器
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true; // 啟用陰影
+            renderer.shadowMap.enabled = true; 
             document.body.appendChild(renderer.domElement);
 
             // 加入燈光
@@ -152,16 +154,16 @@
             const floorGeo = new THREE.BoxGeometry(worldSize, 2, worldSize);
             const floorMat = new THREE.MeshLambertMaterial({ color: 0x757575 });
             const floor = new THREE.Mesh(floorGeo, floorMat);
-            floor.position.y = -1; // 讓表面剛好在 y=0
+            floor.position.y = -1; 
             floor.receiveShadow = true;
             scene.add(floor);
 
-            // 建立玩家「黑洞」（3D 中用扁平的黑色圓盤表示）
+            // 建立玩家「黑洞」
             const holeGeo = new THREE.RingGeometry(0, 1, 32);
             const holeMat = new THREE.MeshBasicMaterial({ color: 0x000000, side: THREE.DoubleSide });
             playerHole = new THREE.Mesh(holeGeo, holeMat);
-            playerHole.rotation.x = Math.PI / 2; // 躺平在地面上
-            playerHole.position.set(0, 0.02, 0); // 微高於地面避免閃爍
+            playerHole.rotation.x = Math.PI / 2; 
+            playerHole.position.set(0, 0.02, 0); 
             playerHole.scale.set(playerRadius, playerRadius, 1);
             scene.add(playerHole);
 
@@ -171,13 +173,13 @@
                 let type = Math.random();
                 let geo, w, h, d, objType;
 
-                if (type < 0.6) { // 小道具 / 行人 (小方塊)
+                if (type < 0.6) { 
                     w = d = Math.random() * 0.6 + 0.4; h = Math.random() * 1 + 0.5;
                     objType = 'small';
-                } else if (type < 0.9) { // 汽車 / 樹木 (中長方體)
+                } else if (type < 0.9) { 
                     w = Math.random() * 1 + 1.5; d = Math.random() * 1 + 1.5; h = Math.random() * 1.5 + 1;
                     objType = 'medium';
-                } else { // 摩天大樓 (巨大長方體)
+                } else { 
                     w = d = Math.random() * 4 + 4; h = Math.random() * 15 + 10;
                     objType = 'large';
                 }
@@ -186,10 +188,9 @@
                 const mat = new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] });
                 const mesh = new THREE.Mesh(geo, mat);
                 
-                // 隨機散落，計算物理半徑（用寬度的一半估算）
                 mesh.position.set(
                     (Math.random() - 0.5) * (worldSize - 20),
-                    h / 2, // 確保底部貼齊地面
+                    h / 2, 
                     (Math.random() - 0.5) * (worldSize - 20)
                 );
                 mesh.castShadow = true;
@@ -204,9 +205,7 @@
 
         // --- 3. 控制操作設定 ---
         function setupPCControls() {
-            // PC 採用滑鼠中心相對位移控制
             window.addEventListener('mousemove', (e) => {
-                // 計算滑鼠距離螢幕中心的比例 (-1 到 1)
                 mouseX = (e.clientX / window.innerWidth) - 0.5;
                 mouseZ = (e.clientY / window.innerHeight) - 0.5;
             });
@@ -215,12 +214,17 @@
         function setupMobileControls() {
             const bound = document.getElementById('joystickBound');
             const stick = document.getElementById('joystickStick');
-            const rect = bound.getBoundingClientRect();
-            joystick.oX = rect.left + rect.width / 2;
-            joystick.oY = rect.top + rect.height / 2;
+            
+            // 確保每次點擊時重新計算搖桿中心點，避免縮放定位失準
+            const updateJoystickOrigin = () => {
+                const rect = bound.getBoundingClientRect();
+                joystick.oX = rect.left + rect.width / 2;
+                joystick.oY = rect.top + rect.height / 2;
+            };
+            updateJoystickOrigin();
 
             window.addEventListener('pointerdown', (e) => {
-                // 如果點擊靠近搖桿區域，啟動搖桿
+                updateJoystickOrigin();
                 if (Math.hypot(e.clientX - joystick.oX, e.clientY - joystick.oY) < 100) {
                     joystick.active = true;
                 }
@@ -238,7 +242,6 @@
                 }
 
                 stick.style.transform = `translate(${dx}px, ${dy}px)`;
-                // 將搖桿數值標準化為 -1 到 1 供移動使用
                 joystick.dx = dx / joystick.maxR;
                 joystick.dy = dy / joystick.maxR;
             });
@@ -252,16 +255,14 @@
             window.addEventListener('pointercancel', stopL);
         }
 
-        // --- 4. 遊戲主迴圈 (每秒 60 幀) ---
+        // --- 4. 遊戲主迴圈 ---
         function animate() {
             requestAnimationFrame(animate);
 
-            // 4-1. 處理移動邏輯
             let moveX = 0, moveZ = 0;
             const speed = 0.4;
 
             if (deviceType === 'pc') {
-                // 根據滑鼠距離中心的遠近來決定移動速度
                 if (Math.hypot(mouseX, mouseZ) > 0.05) {
                     moveX = mouseX * speed * 2;
                     moveZ = mouseZ * speed * 2;
@@ -274,56 +275,44 @@
             playerHole.position.x += moveX;
             playerHole.position.z += moveZ;
 
-            // 限制黑洞不出 3D 世界邊界
             playerHole.position.x = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.x));
             playerHole.position.z = Math.max(-worldSize/2, Math.min(worldSize/2, playerHole.position.z));
 
-            // 4-2. 3D 吞噬偵測與「下沉動畫」效果
+            // 3D 吞噬與下沉動畫
             for (let i = objects.length - 1; i >= 0; i--) {
                 let obj = objects[i];
                 
-                // 計算黑洞與 3D 物件在地面 (X-Z 平面) 的距離
                 let dx = playerHole.position.x - obj.mesh.position.x;
                 let dz = playerHole.position.z - obj.mesh.position.z;
                 let dist = Math.hypot(dx, dz);
 
-                // 吞噬條件：距離小於黑洞半徑，且黑洞半徑大於物件的物理半徑
                 if (dist < playerRadius && playerRadius > obj.radius) {
-                    // 視覺特效：讓建築物往地下沉
                     obj.mesh.position.y -= 0.5;
 
-                    // 當建築物完全沉入地下時，判定吞噬成功並移除
                     if (obj.mesh.position.y < -obj.height/2) {
                         scene.remove(obj.mesh);
                         objects.splice(i, 1);
 
-                        // 加分並讓黑洞變大
                         score += (obj.type === 'small' ? 10 : obj.type === 'medium' ? 30 : 150);
                         playerRadius += (obj.type === 'small' ? 0.05 : obj.type === 'medium' ? 0.15 : 0.5);
                         
-                        // 更新黑洞 3D 尺寸
                         playerHole.scale.set(playerRadius, playerRadius, 1);
-                        
                         document.getElementById('scoreText').innerText = 
                             `分數: ${score} | 黑洞半徑: ${playerRadius.toFixed(1)}`;
                     }
                 }
             }
 
-            // 4-3. 3D 動態相機跟隨與拉遠 (隨半徑變大，相機自動抬高)
-            // 基礎高度 15，隨著半徑變大而等比例變高，提供大視野
+            // 相機跟隨
             let targetCamY = 15 + (playerRadius * 3); 
             let targetCamZ = 12 + (playerRadius * 2.5);
 
-            // 讓相機平滑地跟隨黑洞 (Lerp 效果)
             camera.position.x += (playerHole.position.x - camera.position.x) * 0.1;
             camera.position.y += ((playerHole.position.y + targetCamY) - camera.position.y) * 0.1;
             camera.position.z += ((playerHole.position.z + targetCamZ) - camera.position.z) * 0.1;
             
-            // 讓相機永遠緊緊盯著黑洞的中心點
             camera.lookAt(playerHole.position);
 
-            // 渲染畫面
             renderer.render(scene, camera);
         }
 
