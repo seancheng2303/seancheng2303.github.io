@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Hole.io - 搖桿高度 200px 優化版</title>
+    <title>3D Hole.io - 動態懸浮搖桿版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
@@ -32,11 +32,12 @@
         #timerText { color: #ff5252; }
         #targetText { color: #ffd740; }
 
-        /* 【修改點】虛擬搖桿位置再往上調高到 200px (bottom 改為 200px) */
+        /* 【修改點】搖桿移除固定坐標，改為絕對定位，並透過 transform 置中手指點擊處 */
         #joystickBound {
-            position: absolute; bottom:120px; right: 50px; width: 150px; height: 200px;
+            position: absolute; width: 120px; height: 120px;
             background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
             border-radius: 50%; display: none; justify-content: center; align-items: center; z-index: 5;
+            transform: translate(-50%, -50%); pointer-events: none;
         }
         #joystickStick { width: 50px; height: 50px; background: rgba(255,255,255,0.6); border-radius: 50%; position: absolute; }
     </style>
@@ -47,7 +48,7 @@
         <h1>黑洞大作戰 3D</h1>
         <div class="subtitle">請選擇您的遊玩設備</div>
         <button class="btn" onclick="selectDevice('pc')">💻 電腦 (滑鼠控制)</button>
-        <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (右側 200px 高搖桿)</button>
+        <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (右側動態懸浮搖桿)</button>
     </div>
 
     <div id="resultMenu" class="overlay" style="display: none;">
@@ -128,7 +129,7 @@
             scene.add(playerHole);
 
             if (deviceType === 'mobile') {
-                document.getElementById('joystickBound').style.display = 'flex';
+                // 動態搖桿初始不設為 flex，由點擊事件控制
                 setupMobileControls();
             } else {
                 setupPCControls();
@@ -246,33 +247,51 @@
             });
         }
 
+        // 【修改點】動態搖桿核心操控邏輯
         function setupMobileControls() {
             const bound = document.getElementById('joystickBound');
             const stick = document.getElementById('joystickStick');
-            const updateOrigin = () => {
-                const rect = bound.getBoundingClientRect();
-                joystick.oX = rect.left + rect.width / 2;
-                joystick.oY = rect.top + rect.height / 2;
-            };
-            updateOrigin();
 
             window.addEventListener('pointerdown', (e) => {
-                updateOrigin();
-                if (Math.hypot(e.clientX - joystick.oX, e.clientY - joystick.oY) < 100) joystick.active = true;
+                if (!gameActive) return;
+                // 限制在螢幕右半邊觸碰，才會觸發動態搖桿
+                if (e.clientX > window.innerWidth / 2) {
+                    joystick.active = true;
+                    joystick.oX = e.clientX;
+                    joystick.oY = e.clientY;
+                    
+                    // 將搖桿外框移動到手指按下的地方並顯現
+                    bound.style.left = e.clientX + 'px';
+                    bound.style.top = e.clientY + 'px';
+                    bound.style.display = 'flex';
+                }
             });
+
             window.addEventListener('pointermove', (e) => {
                 if (!joystick.active) return;
-                let dx = e.clientX - joystick.oX; let dy = e.clientY - joystick.oY;
+                let dx = e.clientX - joystick.oX; 
+                let dy = e.clientY - joystick.oY;
                 let dist = Math.hypot(dx, dy);
-                if (dist > joystick.maxR) { dx = (dx / dist) * joystick.maxR; dy = (dy / dist) * joystick.maxR; }
+                
+                if (dist > joystick.maxR) { 
+                    dx = (dx / dist) * joystick.maxR; 
+                    dy = (dy / dist) * joystick.maxR; 
+                }
                 stick.style.transform = `translate(${dx}px, ${dy}px)`;
-                joystick.dx = dx / joystick.maxR; joystick.dy = dy / joystick.maxR;
+                joystick.dx = dx / joystick.maxR; 
+                joystick.dy = dy / joystick.maxR;
             });
+
             const stopL = () => {
-                joystick.active = false; stick.style.transform = 'translate(0px, 0px)';
-                joystick.dx = 0; joystick.dy = 0;
+                if (!joystick.active) return;
+                joystick.active = false; 
+                bound.style.display = 'none'; // 手指放開，隱藏搖桿
+                stick.style.transform = 'translate(0px, 0px)';
+                joystick.dx = 0; 
+                joystick.dy = 0;
             };
-            window.addEventListener('pointerup', stopL); window.addEventListener('pointercancel', stopL);
+            window.addEventListener('pointerup', stopL); 
+            window.addEventListener('pointercancel', stopL);
         }
 
         function animate() {
@@ -302,7 +321,7 @@
                 let dz = playerHole.position.z - obj.mesh.position.z;
                 let dist = Math.hypot(dx, dz);
 
-                // 完全包覆判定法
+                // 完全包覆判定
                 if (dist + obj.radius <= playerRadius) {
                     
                     let dirX = dx / (dist || 1);
