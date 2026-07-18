@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <title>進階版泡泡龍</title>
+    <title>進階版泡泡龍 - 預判軌跡</title>
     <style>
         body {
             display: flex;
@@ -24,12 +24,14 @@
             background-color: #ecf0f1;
             border: 4px solid #34495e;
             border-radius: 10px;
+            cursor: crosshair; /* 更改游標為準心 */
         }
         .ui-panel {
             display: flex;
             justify-content: space-between;
             width: 400px;
             font-weight: bold;
+            font-size: 18px;
         }
         .next-bubble {
             display: flex;
@@ -41,6 +43,7 @@
             height: 20px;
             border-radius: 50%;
             border: 2px solid white;
+            box-shadow: 0 0 5px rgba(0,0,0,0.5);
         }
     </style>
 </head>
@@ -65,42 +68,32 @@
     // 遊戲常數與設定
     const BUBBLE_RADIUS = 16;
     const DIAMETER = BUBBLE_RADIUS * 2;
-    const HEX_HEIGHT = DIAMETER * Math.sqrt(3) / 2; // 六角形網格的垂直高度偏移
+    const HEX_HEIGHT = DIAMETER * Math.sqrt(3) / 2; 
     const COLS = 11;
     const ROWS = 15;
     const COLORS = ['#e74c3c', '#3498db', '#f1c40f', '#2ecc71', '#9b59b6'];
 
     let score = 0;
-    let grid = []; // 儲存網格資料的二維陣列
+    let grid = []; 
     let currentBubble = null;
     let nextColor = getRandomColor();
     let shooterAngle = -Math.PI / 2;
     let isShooting = false;
 
-    // 滑鼠游標
-    let mouseX = canvas.width / 2;
-    let mouseY = canvas.height / 2;
-
-    // 1. 初始化網格 (產生初始的幾排泡泡)
+    // 1. 初始化與工具函式
     function initGrid() {
         for (let r = 0; r < ROWS; r++) {
             grid[r] = [];
             for (let c = 0; c < COLS; c++) {
-                if (r < 5) { // 初始給予5排
-                    grid[r][c] = getRandomColor();
-                } else {
-                    grid[r][c] = null;
-                }
+                grid[r][c] = (r < 5) ? getRandomColor() : null;
             }
         }
     }
 
-    // 取得隨機顏色
     function getRandomColor() {
         return COLORS[Math.floor(Math.random() * COLORS.length)];
     }
 
-    // 網格座標轉換為畫布像素座標 (六角形交錯排版)
     function getPixelPos(row, col) {
         let offsetX = (row % 2 === 0) ? BUBBLE_RADIUS : BUBBLE_RADIUS * 2;
         let x = col * DIAMETER + offsetX;
@@ -108,36 +101,33 @@
         return { x, y };
     }
 
-    // 畫布像素座標轉換為網格座標 (吸附用)
     function getGridPos(x, y) {
         let row = Math.round((y - BUBBLE_RADIUS) / HEX_HEIGHT);
         let offsetX = (row % 2 === 0) ? BUBBLE_RADIUS : BUBBLE_RADIUS * 2;
         let col = Math.round((x - offsetX) / DIAMETER);
-        
-        // 邊界防呆
         row = Math.max(0, Math.min(row, ROWS - 1));
         col = Math.max(0, Math.min(col, COLS - 1));
         return { row, col };
     }
 
-    // 繪製泡泡
-    function drawBubble(x, y, color) {
+    // 繪製泡泡 (新增透明度參數支援幽靈泡泡)
+    function drawBubble(x, y, color, alpha = 1) {
+        ctx.globalAlpha = alpha;
         ctx.beginPath();
         ctx.arc(x, y, BUBBLE_RADIUS - 1, 0, Math.PI * 2);
         ctx.fillStyle = color;
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+        ctx.strokeStyle = `rgba(255,255,255,${0.8 * alpha})`;
         ctx.lineWidth = 2;
         ctx.stroke();
         
-        // 高光效果
         ctx.beginPath();
         ctx.arc(x - 5, y - 5, 4, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillStyle = `rgba(255,255,255,${0.4 * alpha})`;
         ctx.fill();
+        ctx.globalAlpha = 1; // 恢復透明度
     }
 
-    // 更新發射器與裝填泡泡
     function reloadShooter() {
         currentBubble = {
             x: canvas.width / 2,
@@ -150,7 +140,7 @@
         isShooting = false;
     }
 
-    // 取得周圍的六個鄰居 (奇偶排的相對座標不同)
+    // 2. 演算法：取得鄰居與 BFS 消除
     function getNeighbors(row, col) {
         const neighbors = [];
         const evenOffsets = [[0, -1], [0, 1], [-1, -1], [-1, 0], [1, -1], [1, 0]];
@@ -167,18 +157,15 @@
         return neighbors;
     }
 
-    // 3. 經典三消：使用 BFS (廣度優先搜尋) 尋找相連的同色泡泡
     function findMatches(row, col, color) {
         let matched = [];
         let visited = new Set();
         let queue = [{ r: row, c: col }];
-        
         visited.add(`${row},${col}`);
 
         while (queue.length > 0) {
             let curr = queue.shift();
             matched.push(curr);
-
             let neighbors = getNeighbors(curr.r, curr.c);
             for (let n of neighbors) {
                 if (!visited.has(`${n.r},${n.c}`) && grid[n.r][n.c] === color) {
@@ -190,36 +177,103 @@
         return matched;
     }
 
-    // 處理發射泡泡的碰撞與吸附
+    // ★ 核心新功能：繪製預測軌跡與落點
+    function drawTrajectory() {
+        if (isShooting || !currentBubble) return;
+
+        let simX = currentBubble.x;
+        let simY = currentBubble.y;
+        let simVx = Math.cos(shooterAngle);
+        let simVy = Math.sin(shooterAngle);
+        const stepSize = 4; // 模擬步長
+        let collided = false;
+
+        ctx.beginPath();
+        ctx.moveTo(simX, simY);
+
+        // 虛擬步進模擬路徑
+        for (let i = 0; i < 500; i++) { // 設定上限避免無窮迴圈
+            simX += simVx * stepSize;
+            simY += simVy * stepSize;
+
+            // 碰到左右牆壁，發生反射
+            if (simX <= BUBBLE_RADIUS || simX >= canvas.width - BUBBLE_RADIUS) {
+                simVx *= -1;
+                simX = Math.max(BUBBLE_RADIUS, Math.min(simX, canvas.width - BUBBLE_RADIUS));
+                ctx.lineTo(simX, simY);
+            }
+
+            // 碰到天花板
+            if (simY <= BUBBLE_RADIUS) {
+                collided = true;
+                break;
+            }
+
+            // 碰到網格上的泡泡
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (grid[r][c] !== null) {
+                        let pos = getPixelPos(r, c);
+                        let dx = simX - pos.x;
+                        let dy = simY - pos.y;
+                        if (Math.sqrt(dx * dx + dy * dy) < DIAMETER - 2) {
+                            collided = true;
+                            break;
+                        }
+                    }
+                }
+                if (collided) break;
+            }
+
+            if (collided) break;
+        }
+
+        ctx.lineTo(simX, simY);
+        
+        // 畫出帶有當前顏色的虛線軌跡
+        ctx.strokeStyle = currentBubble.color;
+        ctx.setLineDash([8, 6]);
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.setLineDash([]); // 重設為實線
+
+        // 在最終落點畫出半透明的「幽靈泡泡」
+        if (collided) {
+            let targetPos = getGridPos(simX, simY);
+            // 避免重疊，退回一小步吸附
+            if (grid[targetPos.row][targetPos.col] !== null) {
+                 targetPos = getGridPos(simX - simVx * stepSize * 2, simY - simVy * stepSize * 2);
+            }
+            let ghostPixelPos = getPixelPos(targetPos.row, targetPos.col);
+            drawBubble(ghostPixelPos.x, ghostPixelPos.y, currentBubble.color, 0.4);
+        }
+    }
+
+    // 處理實際發射與更新
     function updateShootingBubble() {
         if (!isShooting) return;
 
         currentBubble.x += currentBubble.vx;
         currentBubble.y += currentBubble.vy;
 
-        // 2. 物理反彈 (左右牆壁)
+        // 牆壁反彈
         if (currentBubble.x <= BUBBLE_RADIUS || currentBubble.x >= canvas.width - BUBBLE_RADIUS) {
             currentBubble.vx *= -1;
             currentBubble.x = Math.max(BUBBLE_RADIUS, Math.min(currentBubble.x, canvas.width - BUBBLE_RADIUS));
         }
 
-        // 碰撞偵測 (碰到頂部或其他泡泡)
         let collided = false;
-        
         if (currentBubble.y <= BUBBLE_RADIUS) {
-            collided = true; // 碰到天花板
+            collided = true; 
         } else {
-            // 檢查是否碰到網格中的泡泡
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
                     if (grid[r][c] !== null) {
                         let pos = getPixelPos(r, c);
                         let dx = currentBubble.x - pos.x;
                         let dy = currentBubble.y - pos.y;
-                        let dist = Math.sqrt(dx * dx + dy * dy);
-                        if (dist < DIAMETER - 2) {
-                            collided = true;
-                            break;
+                        if (Math.sqrt(dx * dx + dy * dy) < DIAMETER - 2) {
+                            collided = true; break;
                         }
                     }
                 }
@@ -228,47 +282,42 @@
         }
 
         if (collided) {
-            // 六角形網格吸附
             let targetPos = getGridPos(currentBubble.x, currentBubble.y);
-            
-            // 如果吸附點已經有泡泡，尋找最近的空位
             if (grid[targetPos.row][targetPos.col] !== null) {
                 targetPos = getGridPos(currentBubble.x - currentBubble.vx, currentBubble.y - currentBubble.vy);
             }
 
-            // 將泡泡加入網格
             grid[targetPos.row][targetPos.col] = currentBubble.color;
             
-            // 檢查是否消除
             let matches = findMatches(targetPos.row, targetPos.col, currentBubble.color);
             if (matches.length >= 3) {
-                matches.forEach(m => {
-                    grid[m.r][m.c] = null;
-                });
+                matches.forEach(m => grid[m.r][m.c] = null);
                 score += matches.length * 10;
                 scoreEl.innerText = score;
-                // 這裡可以再加入「失去支撐的連鎖掉落」的進階演算法
             }
-
             reloadShooter();
         }
     }
 
-    // 監聽滑鼠移動：瞄準
+    // 控制器監聽
     canvas.addEventListener('mousemove', (e) => {
         const rect = canvas.getBoundingClientRect();
-        mouseX = e.clientX - rect.left;
-        mouseY = e.clientY - rect.top;
+        let mouseX = e.clientX - rect.left;
+        let mouseY = e.clientY - rect.top;
         let dx = mouseX - (canvas.width / 2);
         let dy = mouseY - (canvas.height - 30);
-        shooterAngle = Math.atan2(dy, dx);
+        
+        // 限制發射角度不能往下
+        let angle = Math.atan2(dy, dx);
+        if (angle > -0.1 && angle < Math.PI / 2) angle = -0.1;
+        if (angle < Math.PI && angle >= Math.PI / 2) angle = Math.PI + 0.1;
+        shooterAngle = angle;
     });
 
-    // 點擊：發射
     canvas.addEventListener('click', () => {
         if (!isShooting && currentBubble) {
             isShooting = true;
-            const speed = 12;
+            const speed = 16; // 加快發射速度，手感更好
             currentBubble.vx = Math.cos(shooterAngle) * speed;
             currentBubble.vy = Math.sin(shooterAngle) * speed;
         }
@@ -289,18 +338,8 @@
             }
         }
 
-        // 畫發射軌跡線
-        ctx.beginPath();
-        ctx.moveTo(canvas.width / 2, canvas.height - 30);
-        ctx.lineTo(
-            canvas.width / 2 + Math.cos(shooterAngle) * 60,
-            canvas.height - 30 + Math.sin(shooterAngle) * 60
-        );
-        ctx.strokeStyle = 'rgba(52, 73, 94, 0.5)';
-        ctx.setLineDash([5, 5]);
-        ctx.lineWidth = 4;
-        ctx.stroke();
-        ctx.setLineDash([]); // 恢復實線
+        // 畫預測軌跡與落點 (在當前泡泡下方繪製)
+        drawTrajectory();
 
         // 更新與畫當前發射的泡泡
         if (currentBubble) {
@@ -312,6 +351,12 @@
         ctx.beginPath();
         ctx.arc(canvas.width / 2, canvas.height - 10, 30, 0, Math.PI * 2);
         ctx.fillStyle = '#7f8c8d';
+        ctx.fill();
+        
+        // 發射台中心的小圓點 (裝飾)
+        ctx.beginPath();
+        ctx.arc(canvas.width / 2, canvas.height - 10, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#2c3e50';
         ctx.fill();
     }
 
