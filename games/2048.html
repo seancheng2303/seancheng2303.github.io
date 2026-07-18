@@ -2,16 +2,27 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<title>2048 — Grid Fix</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>2048 — Mobile Fix</title>
 <style>
   :root{
     --cell-size:100px;
     --gap:20px;
     --cells:4;
   }
+  /* 關鍵修改：鎖定整個網頁，不讓手機瀏覽器有機會上下亂滾 */
+  html, body {
+    overflow: hidden;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+  }
   body{
-    margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
     background:#faf8ef; font-family:system-ui, -apple-system, "Noto Sans TC", Arial;
   }
   #header{
@@ -49,8 +60,6 @@
     border-radius:12px;
     position:relative;
     box-shadow: 0 8px 24px rgba(0,0,0,.12);
-    user-select:none;
-    /* 關鍵：防止手機瀏覽器預設的滑動下拉重整或滾動 */
     touch-action: none; 
   }
   .grid{
@@ -80,7 +89,6 @@
     transform: translate(var(--x,0px), var(--y,0px));
     transition: transform 180ms cubic-bezier(.22,.9,.36,1), box-shadow 120ms;
     box-shadow: 0 6px 12px rgba(0,0,0,.08);
-    user-select:none;
   }
   .tile.new{ animation: pop 180ms ease-out; }
   @keyframes pop{
@@ -106,7 +114,7 @@
   .v1024{ background:#edc53f; color:#f9f6f2 }
   .v2048{ background:#edc22e; color:#f9f6f2 }
   
-  /* 平板與手機的縮放排版 */
+  /* 手機與平板的響應式縮放 */
   @media (max-width:520px){
     :root{ --cell-size:72px; --gap:12px; }
     .tile{ font-size:22px; }
@@ -114,7 +122,7 @@
     #restart{ font-size:14px; padding:8px 12px; }
   }
   @media (max-width:380px){
-    :root{ --cell-size:60px; --gap:10px; }
+    :root{ --cell-size:62px; --gap:10px; }
     .tile{ font-size:18px; }
   }
 </style>
@@ -222,7 +230,6 @@
   }
 
   function render(){
-    // 修改：每次畫畫面時「動態」取得當前 CSS 的方塊大小與間距，避免手機版縮放時座標位移
     const cellSize = parseFloat(getComputedStyle(ROOT).getPropertyValue('--cell-size')) || 100;
     const gap = parseFloat(getComputedStyle(ROOT).getPropertyValue('--gap')) || 20;
     
@@ -261,7 +268,7 @@
     existing.forEach(el => el.remove());
   }
 
-  // 1. 鍵盤事件（保留給桌機）
+  // 桌機鍵盤事件
   window.addEventListener('keydown', e=>{
     const k = e.key.toLowerCase();
     if(['arrowup','w','arrowdown','s','arrowleft','a','arrowright','d'].includes(k)){
@@ -271,16 +278,22 @@
     }
   }, { passive:false });
 
-  // 2. 觸控事件（新增給手機和平板）
+  // 強力相容版：手機觸控滑動事件
   let touchStartX = 0;
   let touchStartY = 0;
 
-  game.addEventListener('touchstart', e => {
+  // 用整個 document 監聽觸控，確保在哪裡滑都有反應
+  document.addEventListener('touchstart', e => {
     touchStartX = e.touches[0].clientX;
     touchStartY = e.touches[0].clientY;
   }, { passive: true });
 
-  game.addEventListener('touchend', e => {
+  // 核心：當手指在螢幕上移動時，強制阻止網頁捲動行為
+  document.addEventListener('touchmove', e => {
+    if (e.cancelable) e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('touchend', e => {
     if (!touchStartX || !touchStartY) return;
 
     let touchEndX = e.changedTouches[0].clientX;
@@ -289,22 +302,18 @@
     let dx = touchEndX - touchStartX;
     let dy = touchEndY - touchStartY;
 
-    // 滑動判定門檻（滑動超過 40 像素才算數，避免太敏感）
-    const threshold = 40; 
+    const threshold = 30; // 滑動超過 30 像素即判定成功
 
     if (Math.abs(dx) > Math.abs(dy)) {
-      // 水平滑動
       if (Math.abs(dx) > threshold) {
         move(dx > 0 ? 'right' : 'left');
       }
     } else {
-      // 垂直滑動
       if (Math.abs(dy) > threshold) {
         move(dy > 0 ? 'down' : 'up');
       }
     }
 
-    // 重設座標
     touchStartX = 0;
     touchStartY = 0;
   }, { passive: true });
