@@ -33,7 +33,7 @@ const menuData = [
         link: 'games/ocean.html'
       },
       {
-        text: 'hole'
+        text: 'Hole'
         link: 'games/Hole.html'
       },
       {
