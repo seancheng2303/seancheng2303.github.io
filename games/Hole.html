@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>3D Hole.io - 搖桿高度優化版</title>
+    <title>3D Hole.io - 搖桿高度 200px 優化版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body {
@@ -32,9 +32,9 @@
         #timerText { color: #ff5252; }
         #targetText { color: #ffd740; }
 
-        /* 【修改點】虛擬搖桿位置往上調高 (bottom 改為 120px) */
+        /* 【修改點】虛擬搖桿位置再往上調高到 200px (bottom 改為 200px) */
         #joystickBound {
-            position: absolute; bottom: 120px; right: 50px; width: 120px; height: 120px;
+            position: absolute; bottom: 200px; right: 50px; width: 120px; height: 120px;
             background: rgba(255,255,255,0.15); border: 2px solid rgba(255,255,255,0.3);
             border-radius: 50%; display: none; justify-content: center; align-items: center; z-index: 5;
         }
@@ -47,7 +47,7 @@
         <h1>黑洞大作戰 3D</h1>
         <div class="subtitle">請選擇您的遊玩設備</div>
         <button class="btn" onclick="selectDevice('pc')">💻 電腦 (滑鼠控制)</button>
-        <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (右側高位搖桿)</button>
+        <button class="btn" onclick="selectDevice('mobile')">📱 手機 / 平板 (右側 200px 高搖桿)</button>
     </div>
 
     <div id="resultMenu" class="overlay" style="display: none;">
