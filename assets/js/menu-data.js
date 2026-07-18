@@ -33,8 +33,8 @@ const menuData = [
         link: 'games/ocean.html'
       },
       {
-        text: 'hole',
-        link: 'games/hole.html'
+        text: 'hole'
+        link: 'games/Hole.html'
       },
       {
         text: 'candy crush',
