@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Maze Paint 小游戏</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f2f5;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+        }
+        p {
+            color: #7f8c8d;
+            margin-top: 0;
+        }
+        canvas {
+            border: 4px solid #34495e;
+            border-radius: 10px;
+            background-color: #ffffff;
+            box-shadow: 0 10px 20px rgba(0,0,0,0.15);
+        }
+        #message {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: bold;
+            color: #2ecc71;
+            height: 30px;
+            transition: all 0.3s;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Maze Paint 迷宫涂色</h1>
+    <p>使用键盘方向键 (↑ ↓ ← →) 或 WASD 键来控制彩球滑动</p>
+    <canvas id="gameCanvas" width="420" height="420"></canvas>
+    <div id="message"></div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageDiv = document.getElementById('message');
+
+        const tileSize = 60; // 每个格子的大小 (px)
+        
+        // 迷宫地图矩阵：1 代表墙壁，0 代表未涂色路径，2 代表已涂色路径
+        // 我们把起点 (1, 1) 默认设为 2（已涂色）
+        const maze = [
+            [1, 1, 1, 1, 1, 1, 1],
+            [1, 2, 0, 0, 1, 0, 1],
+            [1, 0, 1, 0, 0, 0, 1],
+            [1, 0, 1, 1, 1, 0, 1],
+            [1, 0, 0, 0, 1, 0, 1],
+            [1, 1, 1, 0, 0, 0, 1],
+            [1, 1, 1, 1, 1, 1, 1]
+        ];
+
+        // 玩家（彩球）的状态
+        const player = {
+            x: 1, // 阵列中的X坐标
+            y: 1, // 阵列中的Y坐标
+            color: '#ff4757' // 彩球颜色
+        };
+
+        let isGameOver = false;
+
+        // 渲染绘制函数
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 1. 绘制迷宫地图
+            for (let r = 0; r < maze.length; r++) {
+                for (let c = 0; c < maze[r].length; c++) {
+                    if (maze[r][c] === 1) {
+                        ctx.fillStyle = '#2c3e50'; // 墙壁：深色
+                    } else if (maze[r][c] === 2) {
+                        ctx.fillStyle = '#1abc9c'; // 已涂色路径：好看的青绿色
+                    } else {
+                        ctx.fillStyle = '#ffffff'; // 未涂色路径：纯白
+                    }
+                    ctx.fillRect(c * tileSize, r * tileSize, tileSize, tileSize);
+                    
+                    // 为路径格子绘制淡淡的底边，更有质感
+                    if (maze[r][c] !== 1) {
+                        ctx.strokeStyle = '#f1f2f6';
+                        ctx.strokeRect(c * tileSize, r * tileSize, tileSize, tileSize);
+                    }
+                }
+            }
+
+            // 2. 绘制玩家彩球
+            ctx.beginPath();
+            ctx.arc(
+                player.x * tileSize + tileSize / 2,
+                player.y * tileSize + tileSize / 2,
+                tileSize / 3, // 球体半径
+                0,
+                Math.PI * 2
+            );
+            ctx.fillStyle = player.color;
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        // 核心移动逻辑：一滑到底
+        function move(dx, dy) {
+            if (isGameOver) return;
+
+            let moved = false;
+
+            // 只要前方不是墙壁(1)，就一直向前滑行
+            while (maze[player.y + dy][player.x + dx] !== 1) {
+                player.x += dx;
+                player.y += dy;
+                maze[player.y][player.x] = 2; // 沿途全部图上颜色
+                moved = true;
+            }
+
+            // 如果确实发生过位移，刷新画面并检查输赢
+            if (moved) {
+                draw();
+                checkWin();
+            }
+        }
+
+        // 检查是否全图涂满
+        function checkWin() {
+            let hasUnpainted = false;
+
+            for (let r = 0; r < maze.length; r++) {
+                if (maze[r].includes(0)) { // 只要地图里还包含 0，说明没涂完
+                    hasUnpainted = true;
+                    break;
+                }
+            }
+
+            if (!hasUnpainted) {
+                isGameOver = true;
+                messageDiv.innerText = '🎉 恭喜通关！全部涂满啦！';
+            }
+        }
+
+        // 监听键盘事件
+        window.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp':
+                case 'w': case 'W':
+                    move(0, -1);
+                    break;
+                case 'ArrowDown':
+                case 's': case 'S':
+                    move(0, 1);
+                    break;
+                case 'ArrowLeft':
+                case 'a': case 'A':
+                    move(-1, 0);
+                    break;
+                case 'ArrowRight':
+                case 'd': case 'D':
+                    move(1, 0);
+                    break;
+            }
+        });
+
+        // 首次打开页面时初始化渲染
+        draw();
+    </script>
+</body>
+</html>
