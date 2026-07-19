@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maze Paint 地獄難度版</title>
+    <title>Maze Paint 完美邏輯版</title>
     <style>
         body {
             display: flex;
@@ -12,7 +12,7 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            background-color: #1e272e; /* 換個更硬核的深色背景 */
+            background-color: #1e272e;
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: manipulation; 
         }
@@ -26,7 +26,7 @@
             font-size: 26px;
         }
         .level-badge {
-            background-color: #ff3f34;
+            background-color: #f39c12;
             color: white;
             padding: 3px 12px;
             border-radius: 20px;
@@ -34,10 +34,10 @@
             font-weight: bold;
             display: inline-block;
             margin-top: 5px;
-            box-shadow: 0 0 10px rgba(255, 63, 52, 0.5);
+            box-shadow: 0 0 10px rgba(243, 156, 18, 0.5);
         }
         canvas {
-            border: 4px solid #4bcffa;
+            border: 4px solid #f39c12;
             border-radius: 10px;
             background-color: #ffffff;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
@@ -46,11 +46,9 @@
             margin-top: 8px;
             font-size: 20px;
             font-weight: bold;
-            color: #0fbcf9;
+            color: #f1c40f;
             height: 28px;
         }
-
-        /* 十字方向鍵佈局 */
         .dpad-container {
             display: grid;
             grid-template-columns: repeat(3, 60px);
@@ -59,14 +57,14 @@
             margin-top: 15px;
         }
         .dpad-btn {
-            background-color: #4bcffa;
+            background-color: #f39c12;
             color: #1e272e;
             border: none;
             border-radius: 12px;
             font-size: 22px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px #0fbcf9;
+            box-shadow: 0 4px #e67e22;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -74,9 +72,9 @@
             transition: transform 0.05s;
         }
         .dpad-btn:active {
-            box-shadow: 0 0px #0fbcf9;
+            box-shadow: 0 0px #e67e22;
             transform: translateY(4px);
-            background-color: #0fbcf9;
+            background-color: #e67e22;
         }
         #btnUp    { grid-column: 2; grid-row: 1; }
         #btnLeft  { grid-column: 1; grid-row: 2; }
@@ -87,7 +85,7 @@
 <body>
 
     <div class="header-container">
-        <h1>Maze Paint 地獄難度</h1>
+        <h1>Maze Paint 完美邏輯版</h1>
         <div class="level-badge" id="levelDisplay">關卡: 1 / 1000</div>
     </div>
     
@@ -115,57 +113,97 @@
         let tileSize = 0; 
         let isGameOver = false;
 
-        const player = { x: 1, y: 1, color: '#ff3f34' };
+        const player = { x: 1, y: 1, color: '#e74c3c' };
 
         function startNewLevel() {
             isGameOver = false;
             messageDiv.innerText = '';
             levelDisplay.innerText = `關卡: ${currentLevel} / ${maxLevels}`;
 
-            // 尺寸成長速度加快，更快進入大迷宮
-            mazeSize = 7 + Math.min(12, Math.floor((currentLevel - 1) / 3)) * 2;
+            // 難度隨關卡提升，地圖變大
+            mazeSize = 7 + Math.min(10, Math.floor((currentLevel - 1) / 3)) * 2;
             tileSize = canvas.width / mazeSize;
 
+            // 1. 初始化全牆壁地圖
             maze = Array(mazeSize).fill().map(() => Array(mazeSize).fill(1));
-
-            // 1. 標準 DFS 迷宮生成
-            function carve(r, c) {
-                maze[r][c] = 0; 
-                const dirs = [[-2, 0], [2, 0], [0, -2], [0, 2]].sort(() => Math.random() - 0.5);
-
-                for (let [dr, dc] of dirs) {
-                    let nr = r + dr;
-                    let nc = c + dc;
-                    if (nr > 0 && nr < mazeSize - 1 && nc > 0 && nc < mazeSize - 1 && maze[nr][nc] === 1) {
-                        maze[r + dr / 2][c + dc / 2] = 0; 
-                        carve(nr, nc); 
-                    }
-                }
-            }
-            carve(1, 1);
-
-            // 2. 核心改動：惡意破牆機制 (增加空地與迴圈)
-            // 關卡越高，打破牆壁的機率越高，最高可達 45% 的牆壁被拆除
-            let breakWallChance = Math.min(0.45, 0.05 + (currentLevel / 50) * 0.4); 
+            maze[1][1] = 0;
             
-            for (let r = 1; r < mazeSize - 1; r++) {
-                for (let c = 1; c < mazeSize - 1; c++) {
-                    if (maze[r][c] === 1) {
-                        // 為了確保迷宮依然「可解」，我們只打通兩邊是路、兩邊是牆的障礙物
-                        // 這樣會形成四通八達的通道，而不是一整塊沒有牆壁無法停下的死區
-                        let verticalPass = (maze[r-1][c] === 0 && maze[r+1][c] === 0 && maze[r][c-1] === 1 && maze[r][c+1] === 1);
-                        let horizontalPass = (maze[r][c-1] === 0 && maze[r][c+1] === 0 && maze[r-1][c] === 1 && maze[r+1][c] === 1);
+            // 2. 核心修正：滑動式開路演算法 (保證 100% 可解)
+            let nodes = [[1, 1]];
+            
+            while(nodes.length > 0) {
+                // 模擬真實玩家，從可以煞車的點開始找方向挖路
+                let idx = nodes.length - 1; 
+                if (Math.random() < 0.2) idx = Math.floor(Math.random() * nodes.length);
+                
+                let [r, c] = nodes[idx];
+                let carved = false;
+                
+                let dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]].sort(() => Math.random() - 0.5);
+                
+                for (let [dr, dc] of dirs) {
+                    let validLengths = [];
+                    // 探測這個方向可以滑多遠
+                    for (let len = 2; len < mazeSize - 1; len++) {
+                        let endR = r + dr * len;
+                        let endC = c + dc * len;
                         
-                        if ((verticalPass || horizontalPass) && Math.random() < breakWallChance) {
-                            maze[r][c] = 0; // 拆除牆壁，挖空空間
+                        // 確保不挖出邊界
+                        if (endR <= 0 || endR >= mazeSize - 1 || endC <= 0 || endC >= mazeSize - 1) break;
+                        
+                        let isValid = true;
+                        for (let step = 1; step <= len; step++) {
+                            let pr = r + dr * step;
+                            let pc = c + dc * step;
+                            if (maze[pr][pc] === 0) { isValid = false; break; }
+                            
+                            // 檢查兩側，確保路徑不會跟其他路徑黏在一起導致失去牆壁
+                            if (dr === 0) {
+                                if (maze[pr-1][pc] === 0 || maze[pr+1][pc] === 0) { isValid = false; break; }
+                            } else {
+                                if (maze[pr][pc-1] === 0 || maze[pr][pc+1] === 0) { isValid = false; break; }
+                            }
+                        }
+                        
+                        // 確保路徑終點的下一格是牆壁，這樣玩家滑過來才有煞車點
+                        let nextR = r + dr * (len + 1);
+                        let nextC = c + dc * (len + 1);
+                        if (nextR >= 0 && nextR < mazeSize && nextC >= 0 && nextC < mazeSize) {
+                            if (maze[nextR][nextC] === 0) isValid = false;
+                        }
+                        
+                        if (isValid) {
+                            validLengths.push(len);
+                        } else {
+                            break; 
                         }
                     }
+                    
+                    if (validLengths.length > 0) {
+                        // 優先選擇較長的路徑，增加爽快感
+                        let chosenLen = validLengths[validLengths.length - 1];
+                        if (Math.random() < 0.3) chosenLen = validLengths[Math.floor(Math.random() * validLengths.length)];
+                        
+                        // 實際開挖
+                        for (let step = 1; step <= chosenLen; step++) {
+                            maze[r + dr * step][c + dc * step] = 0;
+                        }
+                        // 把新的煞車點加入清單，作為未來的起點
+                        nodes.push([r + dr * chosenLen, c + dc * chosenLen]);
+                        carved = true;
+                        break;
+                    }
+                }
+                
+                // 如果這個點四面八方都不能挖了，就把它從清單移除
+                if (!carved) {
+                    nodes.splice(idx, 1);
                 }
             }
 
             player.x = 1;
             player.y = 1;
-            maze[1][1] = 2;
+            maze[1][1] = 2; // 起點自動塗色
 
             draw();
         }
@@ -176,11 +214,11 @@
             for (let r = 0; r < mazeSize; r++) {
                 for (let c = 0; c < mazeSize; c++) {
                     if (maze[r][c] === 1) {
-                        ctx.fillStyle = '#1e272e'; // 牆壁顏色變深
+                        ctx.fillStyle = '#1e272e'; // 牆壁
                     } else if (maze[r][c] === 2) {
-                        ctx.fillStyle = '#0fbcf9'; // 塗色變成亮藍色
+                        ctx.fillStyle = '#f39c12'; // 塗色 (橘色)
                     } else {
-                        ctx.fillStyle = '#d2dae2'; // 空白路徑
+                        ctx.fillStyle = '#ecf0f1'; // 空白路徑
                     }
                     ctx.fillRect(c * tileSize, r * tileSize, Math.ceil(tileSize), Math.ceil(tileSize));
                     
@@ -235,7 +273,7 @@
                 if (currentLevel >= maxLevels) {
                     messageDiv.innerText = '🏆 封神！1000關全破！';
                 } else {
-                    messageDiv.innerText = '🔥 漂亮！難度繼續提升...';
+                    messageDiv.innerText = '🔥 完美！準備進入下一關...';
                     currentLevel++;
                     setTimeout(startNewLevel, 1000);
                 }
