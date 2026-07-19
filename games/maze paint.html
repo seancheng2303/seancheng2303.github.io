@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Maze Paint - 固定題庫版</title>
+    <title>Maze Paint - 終極完美無Bug版</title>
     <style>
         body {
             display: flex;
@@ -12,18 +12,17 @@
             justify-content: center;
             min-height: 100vh;
             margin: 0;
-            background-color: #1a1a2e; /* 沉穩深色背景 */
+            background-color: #121212; 
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             touch-action: manipulation; 
         }
         
-        /* 遊戲容器，用來定位右上角的按鈕 */
         .game-container {
             position: relative;
-            background-color: #16213e;
+            background-color: #1e1e2f;
             padding: 20px;
             border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8);
         }
 
         .header-container {
@@ -31,12 +30,12 @@
             margin-bottom: 15px;
         }
         h1 {
-            color: #e94560;
+            color: #00d2d3;
             margin: 0;
             font-size: 26px;
         }
         .level-badge {
-            background-color: #0f3460;
+            background-color: #ff9f43;
             color: white;
             padding: 5px 15px;
             border-radius: 20px;
@@ -51,7 +50,7 @@
             position: absolute;
             top: 20px;
             right: 20px;
-            background-color: #e94560;
+            background-color: #ee5253;
             color: white;
             border: none;
             padding: 8px 12px;
@@ -59,16 +58,16 @@
             font-size: 14px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 3px #8b1d32;
+            box-shadow: 0 3px #b33939;
             transition: transform 0.05s;
         }
         .restart-btn:active {
-            box-shadow: 0 0px #8b1d32;
+            box-shadow: 0 0px #b33939;
             transform: translateY(3px);
         }
 
         canvas {
-            border: 4px solid #0f3460;
+            border: 4px solid #341f97;
             border-radius: 10px;
             background-color: #ffffff;
             display: block;
@@ -77,7 +76,7 @@
             margin-top: 10px;
             font-size: 20px;
             font-weight: bold;
-            color: #4cd137;
+            color: #1dd1a1;
             height: 28px;
             text-align: center;
         }
@@ -92,21 +91,21 @@
             justify-content: center;
         }
         .dpad-btn {
-            background-color: #0f3460;
+            background-color: #341f97;
             color: white;
             border: none;
             border-radius: 12px;
             font-size: 22px;
             font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px #0a2342;
+            box-shadow: 0 4px #221366;
             display: flex;
             align-items: center;
             justify-content: center;
             user-select: none;
         }
         .dpad-btn:active {
-            box-shadow: 0 0px #0a2342;
+            box-shadow: 0 0px #221366;
             transform: translateY(4px);
         }
         #btnUp    { grid-column: 2; grid-row: 1; }
@@ -121,8 +120,8 @@
         <button class="restart-btn" id="restartBtn">🔄 重置</button>
 
         <div class="header-container">
-            <h1>Maze Paint 完美題庫</h1>
-            <div class="level-badge" id="levelDisplay">關卡: 1</div>
+            <h1>Maze Paint 終極版</h1>
+            <div class="level-badge" id="levelDisplay">關卡: 1 / 1000</div>
         </div>
         
         <canvas id="gameCanvas" width="360" height="360"></canvas>
@@ -142,157 +141,157 @@
         const messageDiv = document.getElementById('message');
         const levelDisplay = document.getElementById('levelDisplay');
 
-        // =================【題庫系統 (1 = 牆壁, 0 = 空地)】=================
-        // 這裡可以無限新增關卡，格式更直觀，保證 100% 絕對可通關！
-        const levelData = [
-            // 第 1 關 (暖身：基本轉折)
-            [
-                "111111111",
-                "100010001",
-                "101010101",
-                "101000101",
-                "101111101",
-                "100000001",
-                "111111111"
-            ],
-            // 第 2 關 (出現十字路口，需要煞車)
-            [
-                "11111111111",
-                "10000010001",
-                "10111010101",
-                "10001000101",
-                "11101111101",
-                "10000000001",
-                "11111111111"
-            ],
-            // 第 3 關 (大迴圈地獄)
-            [
-                "1111111111111",
-                "1000000000001",
-                "1011111111101",
-                "1010000000101",
-                "1010111110101",
-                "1000100010001",
-                "1111111111111"
-            ],
-            // 第 4 關 (專家級：中空與多岔路)
-            [
-                "1111111111111",
-                "1000001000001",
-                "1011101011101",
-                "1010000000101",
-                "1010111110101",
-                "1010001000101",
-                "1011101011101",
-                "1000001000001",
-                "1111111111111"
-            ],
-            // 第 5 關 (專家級：極限長滑動與陷阱死角)
-            [
-                "111111111111111",
-                "100010000000101",
-                "101010111110101",
-                "101000100010001",
-                "101111101011101",
-                "100000001000001",
-                "111110111110111",
-                "100000000000001",
-                "111111111111111"
-            ]
-        ];
-
-        let currentLevelIndex = 0; // 當前關卡索引
+        let currentLevel = 1;
+        const maxLevels = 1000;
+        
         let maze = [];
-        let mazeRows = 0;
-        let mazeCols = 0;
+        let originalMaze = []; // 紀錄初始狀態，用於重新開始
+        let mazeSize = 15; // 起始尺寸
         let tileSize = 0; 
         let isGameOver = false;
 
-        const player = { x: 0, y: 0, color: '#e94560' };
+        let player = { x: 1, y: 1, color: '#ff9f43' };
 
-        // 載入指定關卡
-        function loadLevel(index) {
-            if (index >= levelData.length) {
-                messageDiv.innerText = '🏆 恭喜！所有關卡全破！';
-                return;
-            }
+        // 核心修正：承重牆保護演算法 (保證絕對有解)
+        function generatePerfectMaze(size) {
+            // 初始化：1 代表普通牆壁
+            let newMaze = Array(size).fill().map(() => Array(size).fill(1));
+            newMaze[1][1] = 0;
+            let nodes = [[1, 1]];
 
-            isGameOver = false;
-            messageDiv.innerText = '';
-            levelDisplay.innerText = `關卡: ${index + 1} / ${levelData.length}`;
+            while(nodes.length > 0) {
+                // 混合 DFS 與 BFS，讓迷宮既深又廣
+                let idx = nodes.length - 1; 
+                if (Math.random() < 0.4) idx = Math.floor(Math.random() * nodes.length);
+                
+                let [r, c] = nodes[idx];
+                let carved = false;
+                
+                let dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]].sort(() => Math.random() - 0.5);
+                
+                for (let [dr, dc] of dirs) {
+                    let validLengths = [];
+                    // 探測可挖長度
+                    for (let len = 1; len < size - 2; len++) {
+                        let endR = r + dr * len;
+                        let endC = c + dc * len;
+                        
+                        if (endR <= 0 || endR >= size - 1 || endC <= 0 || endC >= size - 1) break;
+                        
+                        let isValid = true;
+                        for (let step = 1; step <= len; step++) {
+                            let pr = r + dr * step;
+                            let pc = c + dc * step;
+                            
+                            // 【關鍵防護】只能挖一般牆壁(1)。絕對不可以挖到受保護的煞車牆(3)
+                            if (newMaze[pr][pc] !== 1) { isValid = false; break; }
+                            
+                            // 防止平行的通道互相打通
+                            if (dr === 0) {
+                                if (newMaze[pr-1][pc] === 0 || newMaze[pr+1][pc] === 0) { isValid = false; break; }
+                            } else {
+                                if (newMaze[pr][pc-1] === 0 || newMaze[pr][pc+1] === 0) { isValid = false; break; }
+                            }
+                        }
+                        
+                        // 確保終點的下一格不是空地 (確保有牆可撞)
+                        let nextR = r + dr * (len + 1);
+                        let nextC = c + dc * (len + 1);
+                        if (nextR >= 0 && nextR < size && nextC >= 0 && nextC < size) {
+                            if (newMaze[nextR][nextC] === 0) isValid = false;
+                        }
+                        
+                        if (isValid) {
+                            validLengths.push(len);
+                        } else {
+                            break; 
+                        }
+                    }
+                    
+                    if (validLengths.length > 0) {
+                        // 偏好較長的滑行距離
+                        let chosenLen = validLengths[validLengths.length - 1];
+                        if (Math.random() < 0.2 && validLengths.length > 1) {
+                            chosenLen = validLengths[Math.floor(Math.random() * (validLengths.length - 1))];
+                        }
+                        
+                        // 開挖
+                        for (let step = 1; step <= chosenLen; step++) {
+                            newMaze[r + dr * step][c + dc * step] = 0;
+                        }
+                        
+                        // 【終極防線】將煞車點的牆壁升級為「保護牆 (3)」，確保它未來不被其他通道挖斷
+                        let stopR = r + dr * (chosenLen + 1);
+                        let stopC = c + dc * (chosenLen + 1);
+                        if (stopR >= 0 && stopR < size && stopC >= 0 && stopC < size) {
+                            newMaze[stopR][stopC] = 3; 
+                        }
 
-            // 解析字串地圖成為二維陣列數字
-            const rawMap = levelData[index];
-            mazeRows = rawMap.length;
-            mazeCols = rawMap[0].length;
-            
-            // 計算格子大小以適應 360px 的畫布
-            tileSize = Math.min(canvas.width / mazeCols, canvas.height / mazeRows);
-
-            maze = [];
-            let startFound = false;
-
-            for (let r = 0; r < mazeRows; r++) {
-                let row = [];
-                for (let c = 0; c < mazeCols; c++) {
-                    let tile = parseInt(rawMap[r][c]);
-                    row.push(tile);
-
-                    // 自動把第一個找到的 0 (空地) 設為玩家起點
-                    if (tile === 0 && !startFound) {
-                        player.x = c;
-                        player.y = r;
-                        startFound = true;
+                        nodes.push([r + dr * chosenLen, c + dc * chosenLen]);
+                        carved = true;
+                        break;
                     }
                 }
-                maze.push(row);
+                
+                if (!carved) nodes.splice(idx, 1);
             }
+            return newMaze;
+        }
 
-            // 將起點標記為已塗色 (2)
-            maze[player.y][player.x] = 2;
+        function startNewLevel() {
+            isGameOver = false;
+            messageDiv.innerText = '';
+            levelDisplay.innerText = `關卡: ${currentLevel} / ${maxLevels}`;
+
+            // 難度隨關卡提升，最多放大到 25x25
+            mazeSize = 11 + Math.min(14, Math.floor((currentLevel - 1) / 3)) * 2;
+            tileSize = canvas.width / mazeSize;
+
+            maze = generatePerfectMaze(mazeSize);
+            
+            // 備份原始地圖，用於重新開始按鈕
+            originalMaze = maze.map(row => [...row]); 
+
+            resetPlayer();
             draw();
         }
 
-        // 重新開始當前關卡
-        function restartLevel() {
-            if (currentLevelIndex < levelData.length) {
-                loadLevel(currentLevelIndex);
-            }
+        function resetLevel() {
+            if (isGameOver) return;
+            // 從備份還原
+            maze = originalMaze.map(row => [...row]);
+            resetPlayer();
+            draw();
+        }
+
+        function resetPlayer() {
+            player.x = 1;
+            player.y = 1;
+            maze[1][1] = 2; // 將起點塗色
         }
 
         function draw() {
-            // 清除畫布，並將內容置中
-            ctx.fillStyle = '#16213e';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            const offsetX = (canvas.width - mazeCols * tileSize) / 2;
-            const offsetY = (canvas.height - mazeRows * tileSize) / 2;
-
-            for (let r = 0; r < mazeRows; r++) {
-                for (let c = 0; c < mazeCols; c++) {
-                    if (maze[r][c] === 1) {
-                        ctx.fillStyle = '#16213e'; // 牆壁顏色 (與背景融為一體)
+            for (let r = 0; r < mazeSize; r++) {
+                for (let c = 0; c < mazeSize; c++) {
+                    // 1 是普通牆壁，3 是受保護的承重牆，顯示上一律當作牆壁
+                    if (maze[r][c] === 1 || maze[r][c] === 3) {
+                        ctx.fillStyle = '#1e1e2f'; // 牆壁顏色
                     } else if (maze[r][c] === 2) {
-                        ctx.fillStyle = '#e94560'; // 已塗色 (亮粉紅)
+                        ctx.fillStyle = player.color; // 塗色
                     } else {
-                        ctx.fillStyle = '#d1d8e0'; // 未塗色空地
+                        ctx.fillStyle = '#c8d6e5'; // 空地
                     }
                     
-                    // 繪製格子
-                    ctx.fillRect(
-                        offsetX + c * tileSize, 
-                        offsetY + r * tileSize, 
-                        Math.ceil(tileSize), 
-                        Math.ceil(tileSize)
-                    );
+                    ctx.fillRect(c * tileSize, r * tileSize, Math.ceil(tileSize), Math.ceil(tileSize));
                 }
             }
 
-            // 繪製玩家
             ctx.beginPath();
             ctx.arc(
-                offsetX + player.x * tileSize + tileSize / 2,
-                offsetY + player.y * tileSize + tileSize / 2,
+                player.x * tileSize + tileSize / 2,
+                player.y * tileSize + tileSize / 2,
                 tileSize / 2.3, 
                 0,
                 Math.PI * 2
@@ -306,16 +305,14 @@
             if (isGameOver) return;
             let moved = false;
 
-            // 持續往前滑，直到撞牆
-            while (
-                player.y + dy >= 0 && player.y + dy < mazeRows &&
-                player.x + dx >= 0 && player.x + dx < mazeCols &&
-                maze[player.y + dy][player.x + dx] !== 1
-            ) {
+            // 只要下一步不是 1 (普通牆) 且不是 3 (受保護牆)，就繼續滑
+            let nextCell = maze[player.y + dy][player.x + dx];
+            while (nextCell === 0 || nextCell === 2) {
                 player.x += dx;
                 player.y += dy;
                 maze[player.y][player.x] = 2; 
                 moved = true;
+                nextCell = maze[player.y + dy][player.x + dx];
             }
 
             if (moved) {
@@ -326,7 +323,7 @@
 
         function checkWin() {
             let hasUnpainted = false;
-            for (let r = 0; r < mazeRows; r++) {
+            for (let r = 0; r < mazeSize; r++) {
                 if (maze[r].includes(0)) { 
                     hasUnpainted = true;
                     break;
@@ -335,13 +332,12 @@
 
             if (!hasUnpainted) {
                 isGameOver = true;
-                messageDiv.innerText = '🔥 完美！準備進入下一關...';
-                currentLevelIndex++;
-                setTimeout(() => loadLevel(currentLevelIndex), 1000);
+                messageDiv.innerText = '🔥 完美過關！';
+                currentLevel++;
+                setTimeout(startNewLevel, 1000);
             }
         }
 
-        // 綁定按鍵事件
         window.addEventListener('keydown', (e) => {
             if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.code) > -1) {
                 e.preventDefault();
@@ -359,11 +355,9 @@
         document.getElementById('btnLeft').addEventListener('click', () => move(-1, 0));
         document.getElementById('btnRight').addEventListener('click', () => move(1, 0));
         
-        // 綁定重玩按鈕
-        document.getElementById('restartBtn').addEventListener('click', restartLevel);
+        document.getElementById('restartBtn').addEventListener('click', resetLevel);
 
-        // 啟動第一關
-        loadLevel(currentLevelIndex);
+        startNewLevel();
     </script>
 </body>
 </html>
