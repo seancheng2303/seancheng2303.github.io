@@ -3,156 +3,285 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>專家級迷宮批次生成器</title>
+    <title>Maze Paint - 專家級 100 關</title>
     <style>
         body {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
+            min-height: 100vh;
             margin: 0;
-            background-color: #2c3e50;
+            background-color: #0b111a; /* 更深邃的背景 */
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
+            touch-action: manipulation; 
         }
-        h1 { margin-bottom: 10px; }
-        p { color: #bdc3c7; margin-bottom: 30px; }
-        button {
+        .header-container {
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        h1 {
+            color: #d2dae2;
+            margin: 0;
+            font-size: 26px;
+        }
+        .level-badge {
             background-color: #e74c3c;
             color: white;
-            border: none;
-            padding: 15px 30px;
+            padding: 4px 15px;
+            border-radius: 20px;
+            font-size: 16px;
+            font-weight: bold;
+            display: inline-block;
+            margin-top: 5px;
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.6);
+        }
+        canvas {
+            border: 4px solid #34495e;
+            border-radius: 10px;
+            background-color: #ffffff;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+        }
+        #message {
+            margin-top: 8px;
             font-size: 20px;
             font-weight: bold;
-            border-radius: 8px;
+            color: #2ecc71;
+            height: 28px;
+        }
+        .dpad-container {
+            display: grid;
+            grid-template-columns: repeat(3, 60px);
+            grid-template-rows: repeat(2, 60px);
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .dpad-btn {
+            background-color: #34495e;
+            color: #ecf0f1;
+            border: none;
+            border-radius: 12px;
+            font-size: 22px;
+            font-weight: bold;
             cursor: pointer;
-            box-shadow: 0 4px #c0392b;
-            transition: transform 0.1s;
+            box-shadow: 0 4px #2c3e50;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            transition: transform 0.05s;
         }
-        button:active {
-            box-shadow: 0 0px #c0392b;
+        .dpad-btn:active {
+            box-shadow: 0 0px #2c3e50;
             transform: translateY(4px);
+            background-color: #2c3e50;
         }
-        #status { margin-top: 20px; font-size: 18px; color: #2ecc71; }
+        #btnUp    { grid-column: 2; grid-row: 1; }
+        #btnLeft  { grid-column: 1; grid-row: 2; }
+        #btnDown  { grid-column: 2; grid-row: 2; }
+        #btnRight { grid-column: 3; grid-row: 2; }
     </style>
 </head>
 <body>
 
-    <h1>100關專家級地圖生成器</h1>
-    <p>點擊按鈕，自動生成並下載包含 100 張 25x25 地圖的 JSON 檔案。</p>
+    <div class="header-container">
+        <h1>Maze Paint 專家模式</h1>
+        <div class="level-badge" id="levelDisplay">關卡: 1 / 100</div>
+    </div>
+    
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="message"></div>
 
-    <button id="generateBtn">生成並下載 levels.json</button>
-    <div id="status"></div>
+    <div class="dpad-container">
+        <button id="btnUp" class="dpad-btn">▲</button>
+        <button id="btnLeft" class="dpad-btn">◀</button>
+        <button id="btnDown" class="dpad-btn">▼</button>
+        <button id="btnRight" class="dpad-btn">▶</button>
+    </div>
 
     <script>
-        const btn = document.getElementById('generateBtn');
-        const statusDiv = document.getElementById('status');
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageDiv = document.getElementById('message');
+        const levelDisplay = document.getElementById('levelDisplay');
 
-        function generateExpertMazes(count, size) {
-            const mazes = [];
-            
-            for (let i = 0; i < count; i++) {
-                // 初始化全牆壁地圖
-                let maze = Array(size).fill().map(() => Array(size).fill(1));
-                maze[1][1] = 0;
-                let nodes = [[1, 1]];
+        let currentLevel = 1;
+        const maxLevels = 100;
+        
+        let maze = [];
+        const mazeSize = 25; // 專家級固定超大地圖尺寸
+        const tileSize = canvas.width / mazeSize; 
+        let isGameOver = false;
 
-                // 滑動式開路演算法 (保證可解且具備超長距離滑動)
-                while(nodes.length > 0) {
-                    let idx = nodes.length - 1; 
-                    if (Math.random() < 0.2) idx = Math.floor(Math.random() * nodes.length);
-                    
-                    let [r, c] = nodes[idx];
-                    let carved = false;
-                    
-                    let dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]].sort(() => Math.random() - 0.5);
-                    
-                    for (let [dr, dc] of dirs) {
-                        let validLengths = [];
-                        for (let len = 2; len < size - 1; len++) {
-                            let endR = r + dr * len;
-                            let endC = c + dc * len;
+        const player = { x: 1, y: 1, color: '#e74c3c' };
+
+        // 核心：即時生成專家級地圖
+        function generateExpertMaze() {
+            let newMaze = Array(mazeSize).fill().map(() => Array(mazeSize).fill(1));
+            newMaze[1][1] = 0;
+            let nodes = [[1, 1]];
+
+            while(nodes.length > 0) {
+                let idx = nodes.length - 1; 
+                if (Math.random() < 0.2) idx = Math.floor(Math.random() * nodes.length);
+                
+                let [r, c] = nodes[idx];
+                let carved = false;
+                
+                let dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]].sort(() => Math.random() - 0.5);
+                
+                for (let [dr, dc] of dirs) {
+                    let validLengths = [];
+                    for (let len = 2; len < mazeSize - 1; len++) {
+                        let endR = r + dr * len;
+                        let endC = c + dc * len;
+                        
+                        if (endR <= 0 || endR >= mazeSize - 1 || endC <= 0 || endC >= mazeSize - 1) break;
+                        
+                        let isValid = true;
+                        for (let step = 1; step <= len; step++) {
+                            let pr = r + dr * step;
+                            let pc = c + dc * step;
+                            if (newMaze[pr][pc] === 0) { isValid = false; break; }
                             
-                            if (endR <= 0 || endR >= size - 1 || endC <= 0 || endC >= size - 1) break;
-                            
-                            let isValid = true;
-                            for (let step = 1; step <= len; step++) {
-                                let pr = r + dr * step;
-                                let pc = c + dc * step;
-                                if (maze[pr][pc] === 0) { isValid = false; break; }
-                                
-                                if (dr === 0) {
-                                    if (maze[pr-1][pc] === 0 || maze[pr+1][pc] === 0) { isValid = false; break; }
-                                } else {
-                                    if (maze[pr][pc-1] === 0 || maze[pr][pc+1] === 0) { isValid = false; break; }
-                                }
-                            }
-                            
-                            let nextR = r + dr * (len + 1);
-                            let nextC = c + dc * (len + 1);
-                            if (nextR >= 0 && nextR < size && nextC >= 0 && nextC < size) {
-                                if (maze[nextR][nextC] === 0) isValid = false;
-                            }
-                            
-                            if (isValid) {
-                                validLengths.push(len);
+                            if (dr === 0) {
+                                if (newMaze[pr-1][pc] === 0 || newMaze[pr+1][pc] === 0) { isValid = false; break; }
                             } else {
-                                break; 
+                                if (newMaze[pr][pc-1] === 0 || newMaze[pr][pc+1] === 0) { isValid = false; break; }
                             }
                         }
                         
-                        if (validLengths.length > 0) {
-                            let chosenLen = validLengths[validLengths.length - 1];
-                            if (Math.random() < 0.3) chosenLen = validLengths[Math.floor(Math.random() * validLengths.length)];
-                            
-                            for (let step = 1; step <= chosenLen; step++) {
-                                maze[r + dr * step][c + dc * step] = 0;
-                            }
-                            nodes.push([r + dr * chosenLen, c + dc * chosenLen]);
-                            carved = true;
-                            break;
+                        let nextR = r + dr * (len + 1);
+                        let nextC = c + dc * (len + 1);
+                        if (nextR >= 0 && nextR < mazeSize && nextC >= 0 && nextC < mazeSize) {
+                            if (newMaze[nextR][nextC] === 0) isValid = false;
+                        }
+                        
+                        if (isValid) {
+                            validLengths.push(len);
+                        } else {
+                            break; 
                         }
                     }
                     
-                    if (!carved) {
-                        nodes.splice(idx, 1);
+                    if (validLengths.length > 0) {
+                        let chosenLen = validLengths[validLengths.length - 1];
+                        if (Math.random() < 0.3) chosenLen = validLengths[Math.floor(Math.random() * validLengths.length)];
+                        
+                        for (let step = 1; step <= chosenLen; step++) {
+                            newMaze[r + dr * step][c + dc * step] = 0;
+                        }
+                        nodes.push([r + dr * chosenLen, c + dc * chosenLen]);
+                        carved = true;
+                        break;
                     }
                 }
-                mazes.push(maze);
+                
+                if (!carved) nodes.splice(idx, 1);
             }
-            return mazes;
+            return newMaze;
         }
 
-        btn.addEventListener('click', () => {
-            statusDiv.innerText = '運算中，請稍候...';
-            
-            // 使用 setTimeout 讓 UI 有時間更新狀態
-            setTimeout(() => {
-                // 生成 100 張，大小為 25x25 的專家級地圖
-                const levels = generateExpertMazes(100, 25);
-                
-                // 將資料轉換為 JSON 格式字串
-                const jsonString = JSON.stringify(levels);
-                
-                // 建立 Blob 物件準備下載
-                const blob = new Blob([jsonString], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                
-                // 建立隱藏的 a 標籤來觸發下載
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'expert_levels.json';
-                document.body.appendChild(a);
-                a.click();
-                
-                // 清理
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                statusDiv.innerText = '✅ 100 張地圖已成功生成並下載！';
-            }, 100);
+        function startNewLevel() {
+            isGameOver = false;
+            messageDiv.innerText = '';
+            levelDisplay.innerText = `關卡: ${currentLevel} / ${maxLevels}`;
+
+            // 生成當前關卡的地圖
+            maze = generateExpertMaze();
+
+            player.x = 1;
+            player.y = 1;
+            maze[1][1] = 2; // 起點自動塗色
+
+            draw();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let r = 0; r < mazeSize; r++) {
+                for (let c = 0; c < mazeSize; c++) {
+                    if (maze[r][c] === 1) {
+                        ctx.fillStyle = '#0b111a'; // 牆壁顏色
+                    } else if (maze[r][c] === 2) {
+                        ctx.fillStyle = '#e74c3c'; // 塗色 (熱血紅)
+                    } else {
+                        ctx.fillStyle = '#bdc3c7'; // 空白路徑
+                    }
+                    ctx.fillRect(c * tileSize, r * tileSize, Math.ceil(tileSize), Math.ceil(tileSize));
+                }
+            }
+
+            ctx.beginPath();
+            ctx.arc(
+                player.x * tileSize + tileSize / 2,
+                player.y * tileSize + tileSize / 2,
+                tileSize / 2.2, 
+                0,
+                Math.PI * 2
+            );
+            ctx.fillStyle = '#ffffff'; // 玩家球變成白色更顯眼
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function move(dx, dy) {
+            if (isGameOver) return;
+            let moved = false;
+
+            while (maze[player.y + dy][player.x + dx] !== 1) {
+                player.x += dx;
+                player.y += dy;
+                maze[player.y][player.x] = 2; 
+                moved = true;
+            }
+
+            if (moved) {
+                draw();
+                checkWin();
+            }
+        }
+
+        function checkWin() {
+            let hasUnpainted = false;
+            for (let r = 0; r < mazeSize; r++) {
+                if (maze[r].includes(0)) { 
+                    hasUnpainted = true;
+                    break;
+                }
+            }
+
+            if (!hasUnpainted) {
+                isGameOver = true;
+                if (currentLevel >= maxLevels) {
+                    messageDiv.innerText = '🏆 恭喜破關！你制霸了 100 關專家難度！';
+                } else {
+                    messageDiv.innerText = '🔥 幹得好！準備進入下一關...';
+                    currentLevel++;
+                    setTimeout(startNewLevel, 1000); // 延遲一秒進入下一關
+                }
+            }
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].indexOf(e.code) > -1) {
+                e.preventDefault(); // 防止鍵盤方向鍵導致網頁上下捲動
+            }
+            switch(e.key) {
+                case 'ArrowUp': case 'w': case 'W': move(0, -1); break;
+                case 'ArrowDown': case 's': case 'S': move(0, 1); break;
+                case 'ArrowLeft': case 'a': case 'A': move(-1, 0); break;
+                case 'ArrowRight': case 'd': case 'D': move(1, 0); break;
+            }
         });
+
+        document.getElementById('btnUp').addEventListener('click', () => move(0, -1));
+        document.getElementById('btnDown').addEventListener('click', () => move(0, 1));
+        document.getElementById('btnLeft').addEventListener('click', () => move(-1, 0));
+        document.getElementById('btnRight').addEventListener('click', () => move(1, 0));
+
+        startNewLevel();
     </script>
 </body>
 </html>
